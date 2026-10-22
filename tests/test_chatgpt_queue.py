@@ -86,6 +86,26 @@ class ChatGPTQueueTests(unittest.TestCase):
         self.assertEqual(len(result["moved_to_review"]), 1)
         self.assertEqual(self.queue.list_tasks()["tasks"][0]["status"], "needs_review")
 
+    def test_input_outside_self_root_is_rejected(self):
+        outside = self.base / "outside.json"
+        outside.write_text('{"not":"isolated"}', encoding="utf-8")
+        with self.assertRaises(Exception):
+            self.queue.enqueue(
+                task_type="keyword_cleaning",
+                input_ref=evidence_ref(outside, root=self.base),
+                output_relative="cleaned/out.json",
+                idempotency_key="outside-input",
+            )
+
+    def test_output_path_traversal_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.queue.enqueue(
+                task_type="keyword_cleaning",
+                input_ref=self.input_ref,
+                output_relative="../production/out.json",
+                idempotency_key="path-traversal",
+            )
+
     def test_production_root_is_refused(self):
         with self.assertRaises(Exception):
             ChatGPTTaskQueue(self.base / "production")
