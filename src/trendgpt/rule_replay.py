@@ -47,8 +47,8 @@ def _condition_passes(candidate: dict[str, Any], condition: dict[str, Any]) -> b
 def selected_ids(candidates: list[dict[str, Any]], ruleset: dict[str, Any]) -> set[str]:
     """Evaluate an all-conditions ruleset against a frozen candidate set."""
     conditions = ruleset.get("conditions")
-    if not isinstance(conditions, list):
-        raise ValueError("ruleset.conditions must be an array")
+    if not isinstance(conditions, list) or not conditions:
+        raise ValueError("ruleset.conditions must be a non-empty array")
     selected = set()
     for candidate in candidates:
         candidate_id = candidate.get("candidate_id")
