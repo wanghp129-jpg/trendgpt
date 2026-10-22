@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .benchmark import compare_snapshots
+from .benchmark_snapshot import read_archived_api_snapshot
 from .contracts import ContractError, validate_file, load_json
 from .rules import evaluate_feature_groups
 
@@ -24,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--kind", choices=("candidate", "verified", "benchmark", "run-result", "state"), required=True)
     validate.add_argument("--input", required=True)
 
+    snapshot = sub.add_parser("snapshot-api", help="read an archived API raw file; never calls the API")
+    snapshot.add_argument("--input", required=True, help="path to an already archived raw JSON file")
+    snapshot.add_argument("--output-root", required=True, help="explicit path ending in self-v1")
+    snapshot.add_argument("--acquired-at", required=True, help="RFC3339 timestamp with timezone")
+
     compare = sub.add_parser("compare", help="compare an API benchmark to self-discovery snapshots")
     compare.add_argument("--benchmark", required=True)
     compare.add_argument("--self-snapshot", action="append", default=[])
@@ -33,7 +39,6 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = sub.add_parser("evaluate-rules", help="summarize mature revenue by feature group; never changes rules")
     evaluate.add_argument("--input", required=True, help="JSON array of observation records")
     evaluate.add_argument("--minimum-samples", type=int, default=5)
-
     return parser
 
 
@@ -41,8 +46,18 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "validate":
-            artifact = validate_file(args.kind, args.input)
+            validate_file(args.kind, args.input)
             _print({"status": "valid", "kind": args.kind, "input": str(Path(args.input).absolute())})
+            return 0
+        if args.command == "snapshot-api":
+            result = read_archived_api_snapshot(args.input, acquired_at=args.acquired_at, output_root=args.output_root)
+            _print({
+                "status": result["evaluation_status"],
+                "snapshot_id": result["snapshot_id"],
+                "record_count": len(result["normalized_records"]),
+                "output_path": result["output_path"],
+                "network_requests": 0,
+            })
             return 0
         if args.command == "compare":
             benchmark = load_json(args.benchmark)
