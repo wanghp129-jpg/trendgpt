@@ -1,6 +1,7 @@
 """API benchmark comparison; benchmark records never enter self-discovery data."""
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,51 @@ def _parse_time(value: str) -> datetime:
     if parsed.tzinfo is None:
         raise ValueError("timestamp must include a timezone")
     return parsed
+
+
+def adjudicate_independence(
+    candidate: dict[str, Any],
+    *,
+    first_api_observed_at: str,
+    evidence_ref: dict[str, Any],
+    adjudicated_by: str,
+) -> dict[str, Any]:
+    """Mark relative observation independence only with an explicit timestamp and evidence.
+
+    This does not prove provider generation time when the API omits it. The recorded
+    conclusion is deliberately limited to 'self observed before local API observation'.
+    """
+    api_seen = _parse_time(first_api_observed_at)
+    ref_path = evidence_ref.get("path") if isinstance(evidence_ref, dict) else None
+    ref_hash = evidence_ref.get("sha256") if isinstance(evidence_ref, dict) else None
+    if not isinstance(ref_path, str) or not ref_path.startswith("/") or not isinstance(ref_hash, str) or len(ref_hash) != 64:
+        raise ValueError("an absolute evidence path and SHA-256 digest are required")
+    if not isinstance(adjudicated_by, str) or not adjudicated_by.strip():
+        raise ValueError("adjudicated_by is required")
+    result = deepcopy(candidate)
+    first_self = result.get("first_self_discovered_at")
+    eligibility = {
+        "eligible": False,
+        "reason": "missing_self_discovery_timestamp",
+        "method": "manual_evidence_adjudication",
+        "first_api_observed_at": first_api_observed_at,
+        "evidence_ref": {"path": ref_path, "sha256": ref_hash},
+        "adjudicated_by": adjudicated_by,
+    }
+    if isinstance(first_self, str):
+        try:
+            eligible = _parse_time(first_self) <= api_seen
+        except ValueError:
+            eligible = False
+            eligibility["reason"] = "invalid_self_discovery_timestamp"
+        else:
+            eligibility["eligible"] = eligible
+            eligibility["reason"] = (
+                "self_observed_before_local_api_observation"
+                if eligible else "api_observed_before_or_at_self_discovery"
+            )
+    result["independent_eligibility"] = eligibility
+    return result
 
 
 def _self_eligible(candidate: dict[str, Any], cutoff: datetime) -> bool:
@@ -104,5 +150,8 @@ def compare_snapshots(
         "missed_records": missed,
         "ambiguous_records": ambiguous,
         "cutoff": cutoff,
-        "limitations": ["exact normalized names and explicit aliases only; fuzzy matches require review"],
+        "limitations": [
+            "exact normalized names and explicit aliases only; fuzzy matches require review",
+            "independence is relative to observed API exposure, not provider generation time when that time is unavailable",
+        ],
     }
