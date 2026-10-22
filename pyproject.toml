@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trendgpt"
+version = "0.1.0"
+description = "Isolated, portable new-game discovery and evaluation pipeline"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+trendgpt = "trendgpt.cli:main"
+trendgpt-adjudicate = "trendgpt.adjudicate:main"
+trendgpt-dispatch-intent = "trendgpt.dispatch_intent:main"
+trendgpt-queue = "trendgpt.chatgpt_queue_cli:main"
+trendgpt-chatgpt-lease = "trendgpt.chatgpt_lock_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
