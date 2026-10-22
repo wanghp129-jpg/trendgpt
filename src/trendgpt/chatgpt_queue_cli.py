@@ -157,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
             source = Path(args.input_file).absolute()
             result = _queue(args.output_root).enqueue(
                 task_type=args.task_type,
-                input_ref=evidence_ref(source, root=source.parent),
+                input_ref=evidence_ref(source, root=Path(args.output_root).absolute()),
                 output_relative=args.output_relative,
                 idempotency_key=args.idempotency_key,
                 instance_role=args.instance_role,
@@ -195,12 +195,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run-next":
             return _run_next(args)
         raise AssertionError("unreachable command")
-    except (ContractError, StorageError, ValueError, OSError, RuntimeError) as exc:
-        print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
-        return 2
     except ChatGPTLockTimeout as exc:
         print(json.dumps({"status": "lock_timeout", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 75
+    except (ContractError, StorageError, ValueError, OSError, RuntimeError) as exc:
+        print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
