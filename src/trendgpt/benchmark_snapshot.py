@@ -20,6 +20,9 @@ def read_archived_api_snapshot(
     acquired_at: str,
     output_root: str | Path,
 ) -> dict[str, Any]:
+    root = Path(output_root).absolute()
+    if root.name != "self-v1":
+        raise ContractError("output_root must end in self-v1; refusing production namespace")
     raw_path = Path(raw_path).absolute()
     raw = load_json(raw_path)
     if not isinstance(raw, dict):
@@ -65,8 +68,7 @@ def read_archived_api_snapshot(
         "raw_response_ref": raw_ref,
         "normalized_records": normalized,
         "completeness": {
-            "status": "unknown",
-            "unparsed_records": unparsed,
+            "status": "unknown", "unparsed_records": unparsed,
             "provider_full_set_assertion": None,
             "reason": "the archived payload does not prove that the provider returned a complete benchmark set",
         },
@@ -75,9 +77,7 @@ def read_archived_api_snapshot(
             "reason": "local acquisition time is not provider generation/update time",
         },
         "update_confirmation": {
-            "confirmed": False,
-            "method": "unknown",
-            "evidence_refs": [],
+            "confirmed": False, "method": "unknown", "evidence_refs": [],
             "reason": "provider generated_at/updated_at is absent; operator confirmation is required",
         },
         "evaluation_status": "benchmark_not_ready",
@@ -89,7 +89,7 @@ def read_archived_api_snapshot(
             "keyword records are a reference set only and must never be injected into self-discovery candidates",
         ],
     }
-    output_path = Path(output_root).absolute() / "benchmarks" / snapshot["snapshot_id"] / "api_benchmark_snapshot.json"
-    atomic_write_json(output_path, snapshot, root=output_root)
+    output_path = root / "benchmarks" / snapshot["snapshot_id"] / "api_benchmark_snapshot.json"
+    atomic_write_json(output_path, snapshot, root=root)
     snapshot["output_path"] = str(output_path)
     return snapshot
