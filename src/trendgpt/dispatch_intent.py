@@ -58,6 +58,8 @@ def create_dispatch_intent(
     if root.name != "self-v1":
         raise StorageError("dispatch intent root must end in self-v1")
     _timestamp(created_at, "created_at")
+    if verified_result.get("discovery_origin") != "self_discovered":
+        raise DispatchIntentError("only independently collected self_discovered candidates may enter this intent path")
     if verified_result.get("final_decision") != "build":
         raise DispatchIntentError("candidate must have a final build decision")
     candidate_id = verified_result.get("candidate_id")
@@ -79,17 +81,32 @@ def create_dispatch_intent(
     if not _valid_ref(report_ref):
         raise DispatchIntentError("report evidence must exist and match its SHA-256 reference")
 
-    if source_policy.get("approved") is not True or not isinstance(source_policy.get("policy_id"), str) or not source_policy["policy_id"].strip():
+    policy_id = source_policy.get("policy_id")
+    if source_policy.get("approved") is not True or not isinstance(policy_id, str) or not policy_id.strip():
         raise DispatchIntentError("self-source policy must be explicitly approved")
+    if policy_id.casefold() == "trendoracle-ready":
+        raise DispatchIntentError("the existing API-only trendoracle-ready policy must never be reused for self-discovered candidates")
+    policy_ref = source_policy.get("evidence_ref")
+    if not _valid_ref(policy_ref):
+        raise DispatchIntentError("self-source policy approval evidence must exist and match its SHA-256 reference")
+
     _timestamp(global_dedupe.get("checked_at"), "global_dedupe.checked_at")
     if global_dedupe.get("status") != "clear":
         raise DispatchIntentError("global API/self/inflight duplicate check must be clear")
+    dedupe_ref = global_dedupe.get("evidence_ref")
+    if not _valid_ref(dedupe_ref):
+        raise DispatchIntentError("global dedupe evidence must exist and match its SHA-256 reference")
+
     if authorization.get("approved") is not True or not isinstance(authorization.get("authorization_id"), str) or not authorization["authorization_id"].strip():
         raise DispatchIntentError("explicit dispatch authorization is required")
+    authorization_ref = authorization.get("evidence_ref")
+    if not _valid_ref(authorization_ref):
+        raise DispatchIntentError("authorization evidence must exist and match its SHA-256 reference")
 
     fingerprint_data = "|".join((
         candidate_id, entity_id, domain, str(verified_result.get("code_version", "")),
-        source_policy["policy_id"], report_ref["sha256"],
+        policy_id, report_ref["sha256"], policy_ref["sha256"], dedupe_ref["sha256"],
+        authorization["authorization_id"], authorization_ref["sha256"],
     ))
     intent_id = hashlib.sha256(fingerprint_data.encode("utf-8")).hexdigest()[:32]
     intent = {
@@ -106,9 +123,9 @@ def create_dispatch_intent(
             "google_trends_status": "passed", "domain_status": "available",
         },
         "report_receipt": report_receipt,
-        "source_policy": {"policy_id": source_policy["policy_id"], "approved": True},
-        "global_dedupe": {"status": "clear", "checked_at": global_dedupe["checked_at"]},
-        "authorization": {"authorization_id": authorization["authorization_id"], "approved": True},
+        "source_policy": {"policy_id": policy_id, "approved": True, "evidence_ref": policy_ref},
+        "global_dedupe": {"status": "clear", "checked_at": global_dedupe["checked_at"], "evidence_ref": dedupe_ref},
+        "authorization": {"authorization_id": authorization["authorization_id"], "approved": True, "evidence_ref": authorization_ref},
         "dispatch_status": "intent_only",
         "request_sent": False,
         "website_task_id": None,
