@@ -44,10 +44,7 @@ def evidence_ref(path: str | Path, *, root: str | Path) -> dict[str, str]:
     return {"path": str(target), "sha256": sha256_file(target)}
 
 
-def atomic_write_json(path: str | Path, value: Any, *, root: str | Path) -> None:
-    """Atomically write strict JSON only inside an explicit, isolated root."""
-    target = Path(path).absolute()
-    base = Path(root).absolute()
+def _atomic_write_bytes(target: Path, payload: bytes, base: Path) -> None:
     if target == base:
         raise StorageError("target must be a file below the configured root")
     reject_symlink_components(base)
@@ -59,10 +56,9 @@ def atomic_write_json(path: str | Path, value: Any, *, root: str | Path) -> None
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     reject_symlink_components(target.parent)
-    payload = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
     fd, temp_name = tempfile.mkstemp(prefix=".trendgpt-", suffix=".tmp", dir=target.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "wb") as handle:
             os.fchmod(handle.fileno(), 0o600)
             handle.write(payload)
             handle.flush()
@@ -79,3 +75,29 @@ def atomic_write_json(path: str | Path, value: Any, *, root: str | Path) -> None
         except FileNotFoundError:
             pass
         raise
+
+
+def atomic_write_json(path: str | Path, value: Any, *, root: str | Path) -> None:
+    """Atomically write strict JSON only inside an explicit, isolated root."""
+    target = Path(path).absolute()
+    base = Path(root).absolute()
+    payload = (json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    _atomic_write_bytes(target, payload, base)
+
+
+def store_text_evidence(text: str, *, output_root: str | Path, relative_path: str, media_type: str) -> dict[str, Any]:
+    """Persist raw source text under a self-v1 root and return a hash-bound reference."""
+    root = Path(output_root).absolute()
+    if root.name != "self-v1":
+        raise StorageError("evidence root must end in self-v1")
+    relative = Path(relative_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise StorageError("evidence path must be a safe relative path")
+    target = root / relative
+    _atomic_write_bytes(target, text.encode("utf-8"), root)
+    return {
+        "path": str(target),
+        "sha256": sha256_file(target),
+        "media_type": media_type,
+        "bytes": target.stat().st_size,
+    }
