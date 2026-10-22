@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,9 +17,13 @@ def verified():
     }
 
 
-def receipt():
-    return {"status": "confirmed", "readback_verified": True,
-            "evidence_ref": {"path": "/evidence/report.png", "sha256": "a" * 64}}
+def make_receipt(root: Path):
+    path = root / "report-evidence.png"
+    path.write_bytes(b"fixture evidence bytes")
+    return {
+        "status": "confirmed", "readback_verified": True,
+        "evidence_ref": {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()},
+    }
 
 
 def policy():
@@ -36,9 +41,10 @@ def authorization():
 class DispatchIntentTests(unittest.TestCase):
     def test_intent_only_is_written_after_every_gate(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp) / "self-v1"
+            base = Path(temp)
+            root = base / "self-v1"
             intent = create_dispatch_intent(
-                verified(), report_receipt=receipt(), source_policy=policy(),
+                verified(), report_receipt=make_receipt(base), source_policy=policy(),
                 global_dedupe=dedupe(), authorization=authorization(),
                 output_root=root, created_at="2026-10-22T10:00:00Z",
             )
@@ -49,40 +55,56 @@ class DispatchIntentTests(unittest.TestCase):
 
     def test_missing_explicit_authorization_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
             with self.assertRaises(DispatchIntentError):
                 create_dispatch_intent(
-                    verified(), report_receipt=receipt(), source_policy=policy(),
+                    verified(), report_receipt=make_receipt(base), source_policy=policy(),
                     global_dedupe=dedupe(), authorization={"approved": False},
-                    output_root=Path(temp) / "self-v1", created_at="2026-10-22T10:00:00Z",
+                    output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
                 )
 
     def test_unverified_report_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp:
-            bad_receipt = {**receipt(), "readback_verified": False}
+            base = Path(temp)
+            bad_receipt = {**make_receipt(base), "readback_verified": False}
             with self.assertRaises(DispatchIntentError):
                 create_dispatch_intent(
                     verified(), report_receipt=bad_receipt, source_policy=policy(),
                     global_dedupe=dedupe(), authorization=authorization(),
-                    output_root=Path(temp) / "self-v1", created_at="2026-10-22T10:00:00Z",
+                    output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
+                )
+
+    def test_modified_report_evidence_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            report = make_receipt(base)
+            (base / "report-evidence.png").write_bytes(b"changed bytes")
+            with self.assertRaises(DispatchIntentError):
+                create_dispatch_intent(
+                    verified(), report_receipt=report, source_policy=policy(),
+                    global_dedupe=dedupe(), authorization=authorization(),
+                    output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
                 )
 
     def test_validation_build_without_kd_pass_does_not_create_intent(self):
         with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
             invalid = {**verified(), "kd": 30}
             with self.assertRaises(DispatchIntentError):
                 create_dispatch_intent(
-                    invalid, report_receipt=receipt(), source_policy=policy(),
+                    invalid, report_receipt=make_receipt(base), source_policy=policy(),
                     global_dedupe=dedupe(), authorization=authorization(),
-                    output_root=Path(temp) / "self-v1", created_at="2026-10-22T10:00:00Z",
+                    output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
                 )
 
     def test_production_output_root_is_refused(self):
         with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
             with self.assertRaises(Exception):
                 create_dispatch_intent(
-                    verified(), report_receipt=receipt(), source_policy=policy(),
+                    verified(), report_receipt=make_receipt(base), source_policy=policy(),
                     global_dedupe=dedupe(), authorization=authorization(),
-                    output_root=Path(temp) / "production", created_at="2026-10-22T10:00:00Z",
+                    output_root=base / "production", created_at="2026-10-22T10:00:00Z",
                 )
 
 
