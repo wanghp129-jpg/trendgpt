@@ -10,17 +10,22 @@ This repository is a staged, portable implementation. A component is not conside
 - [x] Isolated benchmark comparison with null coverage for an unready benchmark.
 - [x] Self-v1 state store with a dedicated root, file lock, revision check, and same-slot conflict protection.
 - [x] Descriptive revenue grouping that does not mutate rules.
-- [ ] Run automated tests in CI and fix all failures.
+- [x] Provider-neutral source result contracts and conservative candidate merge.
+- [x] Bounded Steam, Roblox chart and YouTube RSS source adapters; raw source text is preserved under self-v1 evidence.
+- [x] Read-only archived API snapshot conversion; provider freshness/completeness remains unknown by default.
+- [ ] Run and review the latest full GitHub Actions test result.
+- [ ] Validate public source parsers against current live pages in an approved environment.
 - [ ] Review contract fields against a real, redacted local snapshot before relying on the schema in production.
 
 ## Stage 2 — source discovery
 
-1. Verify the real Roblox Up-and-Coming and Top Playing Now page shapes, stable identifiers, pagination and region/device coverage.
-2. Verify Steam recent releases and popular new releases, app IDs, DLC/bundle filtering and pagination.
-3. Inspect existing YouTube query implementation for reusable internals; keep known-keyword SEO discovery separate from unknown-game discovery.
-4. Implement source adapters that preserve raw evidence, source status, pagination/cursors, and partial failures.
-5. Normalize and merge records; ambiguous identity must be reviewed, not fuzzy-merged.
-6. Run repeated read-only collection snapshots and compare source completeness before creating the trends-miner Skill.
+1. Validate the Roblox Up-and-Coming and Top Playing Now adapters against current pages, stable identifiers, region/device scope and coverage.
+2. Validate Steam recent releases and popular new releases, app IDs, DLC/bundle filtering and pagination.
+3. Validate YouTube RSS query behavior and identity-resolution review; keep known-keyword SEO discovery separate from unknown-game discovery.
+4. Improve pagination completeness evidence. The current HTML adapters intentionally report partial when full coverage cannot be proven.
+5. Implement bounded multi-page collection, per-source checkpointing, run snapshots and incremental updates.
+6. Normalize and merge records; ambiguous identity must be reviewed, not fuzzy-merged.
+7. Run repeated read-only collection snapshots before creating the trends-miner Skill.
 
 ## Stage 3 — validation
 
