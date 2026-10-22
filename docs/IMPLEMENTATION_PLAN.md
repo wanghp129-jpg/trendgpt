@@ -13,7 +13,7 @@ This repository is a staged, portable implementation. A component is not conside
 - [x] Provider-neutral source result contracts and conservative candidate merge.
 - [x] Bounded Steam, Roblox chart and YouTube RSS source adapters; raw source text is preserved under self-v1 evidence.
 - [x] Read-only archived API snapshot conversion; provider freshness/completeness remains unknown by default.
-- [ ] Run and review the latest full GitHub Actions test result.
+- [x] Run and review the latest full GitHub Actions offline test result (72 tests passed; current branch, 2026-10-22 UTC).
 - [ ] Validate public source parsers against current live pages in an approved environment.
 - [ ] Review contract fields against a real, redacted local snapshot before relying on the schema in production.
 
