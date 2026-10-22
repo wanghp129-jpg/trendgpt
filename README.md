@@ -18,6 +18,8 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Provider-neutral source result contracts and candidate merging with unresolved-record preservation.
 - Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. Raw source pages are hash-bound and saved under the explicit self-v1 evidence root.
 - A multi-source collect command with explicit network opt-in, bounded pages, isolated candidate snapshots and per-page artifacts.
+- Browser instance registry for existing ports and planned 9226/9227 roles.
+- Cross-process ChatGPT `flock` lease wrapper and persistent self-v1 queue with idempotency, single-task claims, SHA-256 output checks, and uncertain-run review.
 - Pure Lesson 14 decision gates and a provider-injected validation orchestrator. Missing data goes to review rather than silent rejection.
 - Read-only site registry matching, isolated lock-protected self-v1 run state and deterministic rule replay.
 - Archived API snapshot reader that never calls the API and never copies the private identity field; benchmark readiness remains false without update/completeness evidence.
@@ -64,4 +66,5 @@ The example collection command performs public source requests. Do not run it un
 - `docs/INTERFACES.md` — existing vs proposed integration status.
 - `docs/IMPLEMENTATION_PLAN.md` — staged build plan.
 - `docs/PORTING.md` — safe migration guide.
+- `docs/BROWSER_AND_CHATGPT_COORDINATION.md` — port roles, global lock, queue lifecycle and safe migration.
 - `config/example.json` — illustrative configuration only; review all values before use.
