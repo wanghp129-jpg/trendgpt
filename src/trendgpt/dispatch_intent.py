@@ -1,12 +1,16 @@
 """Create an isolated dispatch intent only; never send a website_create request."""
 from __future__ import annotations
 
+import argparse
 import hashlib
+import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .contracts import ContractError, load_json
 from .storage import StorageError, atomic_write_json, reject_symlink_components, sha256_file
 
 
@@ -118,3 +122,42 @@ def create_dispatch_intent(
     reject_symlink_components(target)
     atomic_write_json(target, intent, root=root)
     return intent
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="trendgpt-dispatch-intent")
+    parser.add_argument("--verified-result", required=True)
+    parser.add_argument("--report-receipt", required=True)
+    parser.add_argument("--source-policy", required=True)
+    parser.add_argument("--global-dedupe", required=True)
+    parser.add_argument("--authorization", required=True)
+    parser.add_argument("--output-root", required=True, help="must end in self-v1")
+    parser.add_argument("--created-at", required=True, help="RFC3339 timestamp with timezone")
+    args = parser.parse_args(argv)
+    try:
+        inputs = {
+            "verified_result": load_json(args.verified_result),
+            "report_receipt": load_json(args.report_receipt),
+            "source_policy": load_json(args.source_policy),
+            "global_dedupe": load_json(args.global_dedupe),
+            "authorization": load_json(args.authorization),
+        }
+        for key, value in inputs.items():
+            if not isinstance(value, dict):
+                raise ContractError(f"{key} must be a JSON object")
+        result = create_dispatch_intent(
+            **inputs, output_root=args.output_root, created_at=args.created_at,
+        )
+        print(json.dumps({
+            "status": "intent_only", "intent_id": result["intent_id"],
+            "request_sent": False, "delivery_status": result["delivery_status"],
+            "output_path": str(Path(args.output_root).absolute() / "dispatch-intents" / f"{result['intent_id']}.json"),
+        }, ensure_ascii=False, indent=2))
+        return 0
+    except (ContractError, DispatchIntentError, StorageError, ValueError, OSError) as exc:
+        print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
