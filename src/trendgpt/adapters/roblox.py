@@ -5,10 +5,12 @@ this parser cannot prove pagination completeness, successful pages remain partia
 """
 from __future__ import annotations
 
+from hashlib import sha256
 import re
 from html.parser import HTMLParser
 
 from ..sources import SourceRequest, SourceResult
+from ..storage import StorageError, store_text_evidence
 from .http import SourceFetchError, get_public_text
 
 
@@ -67,17 +69,28 @@ class RobloxChartAdapter:
         except SourceFetchError as exc:
             return SourceResult(self.source_id, "failed", request.fetched_at, request.scope,
                                 errors=[{"code": exc.code, "retryable": exc.retryable}])
+        run_key = sha256(request.run_id.encode("utf-8")).hexdigest()[:16]
+        try:
+            raw_ref = store_text_evidence(
+                html, output_root=request.evidence_root,
+                relative_path=f"evidence/sources/roblox/{run_key}/{list_type}.html",
+                media_type="text/html",
+            )
+        except StorageError:
+            return SourceResult(self.source_id, "failed", request.fetched_at, request.scope,
+                                errors=[{"code": "evidence_write_failed", "retryable": False}])
         parser = _RobloxCards()
         parser.feed(html)
         if not parser.items:
             return SourceResult(self.source_id, "blocked", request.fetched_at,
                                 {**request.scope, "url": url}, coverage={"pagination_complete": False},
+                                evidence_refs=[raw_ref],
                                 errors=[{"code": "page_structure_unrecognized_or_no_cards", "retryable": False}])
         for item in parser.items:
             item["list_type"] = list_type
         return SourceResult(
             self.source_id, "partial", request.fetched_at, {**request.scope, "url": url},
-            items=parser.items,
+            items=parser.items, evidence_refs=[raw_ref],
             coverage={"parsed_items": len(parser.items), "pagination_complete": False,
                       "note": "HTML adapter cannot prove the complete chart was captured"},
         )
