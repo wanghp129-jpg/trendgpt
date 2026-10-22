@@ -82,10 +82,12 @@ class SteamSearchAdapter:
                                 coverage={"url": url, "page_start": start},
                                 errors=[{"code": "parse_no_results", "retryable": False}])
         next_cursor = str(start + len(items)) if len(items) >= page_size else None
+        # The HTML parser does not prove total-result completeness, even if a page is short.
         return SourceResult(
-            self.source_id, "partial" if next_cursor else "complete", request.fetched_at,
+            self.source_id, "partial", request.fetched_at,
             {**request.scope, "url": url, "list_type": list_type}, items=items,
             cursor=str(start), next_cursor=next_cursor,
             coverage={"page_start": start, "page_size": page_size, "parsed_items": len(items),
-                      "pagination_complete": next_cursor is None},
+                      "pagination_complete": False,
+                      "note": "HTML parser has not verified source total or full pagination"},
         )
