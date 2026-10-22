@@ -32,7 +32,10 @@ class ChatGPTLease:
         timeout_seconds: float = 900,
         poll_interval: float = 0.25,
     ):
-        self.path = Path(lock_path).absolute()
+        raw_path = Path(lock_path)
+        if not raw_path.is_absolute():
+            raise ValueError("lock_path must be an absolute file path")
+        self.path = raw_path.absolute()
         self.owner = owner.strip()
         self.task_id = task_id.strip()
         self.timeout_seconds = timeout_seconds
