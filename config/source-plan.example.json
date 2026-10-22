@@ -1,0 +1,57 @@
+{
+  "schema": "trendgpt-source-plan-v1",
+  "sources": [
+    {
+      "source": "roblox",
+      "scope": {
+        "list_type": "up-and-coming",
+        "country": "us",
+        "device": "computer"
+      },
+      "page_limit": 50,
+      "max_pages": 1
+    },
+    {
+      "source": "roblox",
+      "scope": {
+        "list_type": "top-playing-now",
+        "country": "us",
+        "device": "computer"
+      },
+      "page_limit": 50,
+      "max_pages": 1
+    },
+    {
+      "source": "steam",
+      "scope": {
+        "list_type": "recentreleases"
+      },
+      "page_limit": 50,
+      "max_pages": 3
+    },
+    {
+      "source": "steam",
+      "scope": {
+        "list_type": "popularnew"
+      },
+      "page_limit": 50,
+      "max_pages": 3
+    },
+    {
+      "source": "youtube",
+      "scope": {
+        "query": "upcoming game gameplay"
+      },
+      "page_limit": 15,
+      "max_pages": 1
+    },
+    {
+      "source": "youtube",
+      "scope": {
+        "query": "new game trailer"
+      },
+      "page_limit": 15,
+      "max_pages": 1
+    }
+  ]
+}
