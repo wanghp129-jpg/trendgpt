@@ -6,6 +6,15 @@
     "max_candidates_per_run": 25,
     "max_attempts_per_read": 3
   },
+  "browser_registry": "config/browser-instances.example.json",
+  "chatgpt_coordination": {
+    "enabled": true,
+    "global_lock_path": "/CHANGE-ME/to/shared/openclaw-locks/chatgpt-global.lock",
+    "lock_required_for_all_chatgpt_callers": true,
+    "default_lock_timeout_seconds": 900,
+    "queue_state_relative_path": "chatgpt-queue/queue.json",
+    "uncertain_submission_policy": "needs_review_no_automatic_retry"
+  },
   "benchmark": {
     "enabled": true,
     "expected_update_windows": ["00:00", "08:00"],
