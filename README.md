@@ -7,7 +7,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Existing TrendOracle/API production ingestion, state, claims, queue, timer and website dispatch must not be modified by this project.
 - New discovery state uses a separate directory ending in `self-v1`; the runtime caller must pass this root explicitly.
 - Discovery, validation, dispatch authorization, dispatch start and website delivery are distinct states.
-- No production dispatch, domain purchase, scheduled task installation, credential refresh or paid query is run by default.
+- No production dispatch, domain purchase, scheduled task installation, credential refresh or paid query runs by default.
 - Missing data stays unknown; provider failures are not zeroes and are not keyword rejections.
 - API benchmark data is an independent comparison set, never injected into self-discovery results. Benchmark comparison can be disabled without disabling self-discovery.
 
@@ -16,16 +16,19 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Strict JSON loading and initial contract validators.
 - Conservative Unicode/name normalization and exact/known-alias matching.
 - Provider-neutral source result types and a first candidate merge implementation.
+- Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. Raw source pages are hash-bound and saved under the explicit self-v1 evidence root.
+- Parsers deliberately report partial/blocked status when they cannot prove full source coverage; a YouTube video title is not automatically treated as a game name.
 - Pure Lesson 14 decision gates, with missing data sent to review instead of being silently rejected.
 - Isolated, lock-protected self-v1 run state.
-- API benchmark comparison that reports null coverage unless completeness and update confirmation are established.
+- Archived API snapshot reader that never calls the API and never copies the private identity field; benchmark readiness remains false without provider update/completeness evidence.
+- API benchmark comparison that reports null coverage unless readiness is established.
 - Descriptive revenue grouping that requires mature observations and partitions by currency and window; it does not change production rules.
-- CLI for validating artifacts, comparing archived snapshots and summarizing mature revenue groups.
+- CLI for artifact validation, archived API snapshots, explicit opt-in source reads, benchmark comparison and descriptive evaluation.
 - GitHub Actions unit-test workflow.
 
-## What is not yet implemented
+## What is not yet production-ready
 
-Live Roblox, Steam and YouTube source adapters; Similarweb KD browser automation; DataForSEO task integration; final candidate-vs-GPTs Google Trends browser review; batch domain availability; Feishu valid-report/image writing; the approved self-source adapter for website_create; complete multi-round orchestration; historical rule replay and shadow evaluation are still staged work. Their contracts and prerequisites are documented, but they must not be represented as working integrations until verified.
+The public source adapters have not been validated against current live pages in this development environment. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, the approved self-source adapter for website_create, complete multi-round orchestration, and historical rule replay/shadow evaluation remain staged work. Contracts and prerequisites are documented, but these integrations must not be represented as working until verified.
 
 ## Local use
 
@@ -43,11 +46,18 @@ Examples:
 
 ```bash
 trendgpt validate --kind candidate --input /path/to/candidate_keywords.json
-trendgpt compare --benchmark /path/to/api_benchmark_snapshot.json --self-snapshot /path/to/candidate_keywords.json --cutoff 2026-10-22T08:00:00+08:00
+trendgpt snapshot-api --input /private/archive/raw.json --output-root /safe/path/self-v1 --acquired-at 2026-10-22T08:10:00+08:00
+trendgpt compare --benchmark /safe/path/api_benchmark_snapshot.json --self-snapshot /safe/path/candidate_keywords.json --cutoff 2026-10-22T08:00:00+08:00
 trendgpt evaluate-rules --input /path/to/mature_observations.json --minimum-samples 5
 ```
 
-The comparison command reads local JSON files only; it does not call the API. The rules command is descriptive and never modifies a ruleset.
+Network reads require explicit opt-in. Prepare a JSON scope file first, then call e.g.:
+
+```bash
+trendgpt fetch-source --source steam --scope-json /path/to/steam-scope.json --run-id local-review-01 --fetched-at 2026-10-22T08:00:00+08:00 --output-root /safe/path/self-v1 --page-limit 50 --network-enabled
+```
+
+Do not run live collection until the source's current accessibility, use limits, server egress and output path have been approved. The comparison command reads local JSON files only; the rules command is descriptive and never modifies a ruleset.
 
 ## Documentation
 
