@@ -68,6 +68,7 @@ The example collection command performs public source requests. Do not run it un
 - `skills/trends-miner/SKILL.md` — source discovery contract.
 - `skills/trends-valid/SKILL.md` — validation contract and current dependency gaps.
 - `skills/trends-daily-pipeline/SKILL.md` — future orchestration contract.
+- `skills/chatgpt-browser-coordinator/SKILL.md` — browser role and cross-system ChatGPT serialization contract.
 - `skills/keyword-feedback-loop/SKILL.md` — API comparison and feedback contract.
 - `skills/keyword-rule-optimizer/SKILL.md` — rule evaluation and release boundaries.
 - `docs/ARCHITECTURE.md` — architecture and production boundaries.
