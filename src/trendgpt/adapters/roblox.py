@@ -32,16 +32,19 @@ class _RobloxCards(HTMLParser):
                     "platform_id": match.group(1),
                     "source_record_id": match.group(1),
                     "name": (attrs.get("title") or attrs.get("aria-label") or "").strip(),
+                    "_text": "",
                 }
 
     def handle_data(self, data):
         if self.anchor is not None and data.strip():
-            self.anchor["name"] = (self.anchor.get("name", "") + " " + data.strip()).strip()
+            self.anchor["_text"] = (self.anchor.get("_text", "") + " " + data.strip()).strip()
 
     def handle_endtag(self, tag):
         if tag == "a" and self.anchor is not None:
-            name = self.anchor.get("name", "").strip()
+            name = self.anchor.get("name") or self.anchor.get("_text", "")
+            self.anchor.pop("_text", None)
             if name:
+                self.anchor["name"] = name
                 self.items.append(self.anchor)
             self.anchor = None
 
