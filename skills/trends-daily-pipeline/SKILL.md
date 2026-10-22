@@ -24,3 +24,6 @@ This Skill is a design contract, not yet a production runnable orchestrator.
 - API benchmark mode is optional and can be disabled independently.
 - No cron/systemd changes, real dispatch or domain purchase until the user separately authorizes deployment.
 - Provider adapters, report writer, self-source dispatch adapter and cross-source global dedupe are not yet all production-ready.
+- Browser roles are defined in `config/browser-instances.example.json`; 9226 and 9227 are planned only until configured on the VPS.
+- ChatGPT tasks must hold the same cross-process lock for the full submit/wait/read/save lifecycle. Existing `code_before` stages must be explicitly wired to the same lock; separate CDP ports alone do not serialize account-level requests.
+- Do not run the new queue worker until the actual Playwright/CDP cleaner and strict output validation are implemented. Uncertain prompt submission must go to `needs_review`, not automatic retry.
