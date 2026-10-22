@@ -13,29 +13,34 @@ def verified():
         "candidate_id": "c1", "entity_id": "e1", "canonical_name": "Test Game",
         "chosen_domain": "testgame.example", "final_decision": "build",
         "domain_status": "available", "google_trends_status": "passed", "kd": 12,
-        "code_version": "test",
+        "code_version": "test", "discovery_origin": "self_discovered",
     }
+
+
+def make_ref(root: Path, filename: str):
+    path = root / filename
+    path.write_bytes(f"fixture evidence: {filename}".encode())
+    return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def make_receipt(root: Path):
-    path = root / "report-evidence.png"
-    path.write_bytes(b"fixture evidence bytes")
-    return {
-        "status": "confirmed", "readback_verified": True,
-        "evidence_ref": {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()},
-    }
+    return {"status": "confirmed", "readback_verified": True,
+            "evidence_ref": make_ref(root, "report-evidence.png")}
 
 
-def policy():
-    return {"approved": True, "policy_id": "self-source-v1-approved"}
+def policy(root: Path):
+    return {"approved": True, "policy_id": "self-source-v1-approved",
+            "evidence_ref": make_ref(root, "source-policy.json")}
 
 
-def dedupe():
-    return {"status": "clear", "checked_at": "2026-10-22T10:00:00Z"}
+def dedupe(root: Path):
+    return {"status": "clear", "checked_at": "2026-10-22T10:00:00Z",
+            "evidence_ref": make_ref(root, "global-dedupe.json")}
 
 
-def authorization():
-    return {"approved": True, "authorization_id": "approval-001"}
+def authorization(root: Path):
+    return {"approved": True, "authorization_id": "approval-001",
+            "evidence_ref": make_ref(root, "authorization.json")}
 
 
 class DispatchIntentTests(unittest.TestCase):
@@ -44,8 +49,8 @@ class DispatchIntentTests(unittest.TestCase):
             base = Path(temp)
             root = base / "self-v1"
             intent = create_dispatch_intent(
-                verified(), report_receipt=make_receipt(base), source_policy=policy(),
-                global_dedupe=dedupe(), authorization=authorization(),
+                verified(), report_receipt=make_receipt(base), source_policy=policy(base),
+                global_dedupe=dedupe(base), authorization=authorization(base),
                 output_root=root, created_at="2026-10-22T10:00:00Z",
             )
             self.assertEqual(intent["dispatch_status"], "intent_only")
@@ -58,8 +63,8 @@ class DispatchIntentTests(unittest.TestCase):
             base = Path(temp)
             with self.assertRaises(DispatchIntentError):
                 create_dispatch_intent(
-                    verified(), report_receipt=make_receipt(base), source_policy=policy(),
-                    global_dedupe=dedupe(), authorization={"approved": False},
+                    verified(), report_receipt=make_receipt(base), source_policy=policy(base),
+                    global_dedupe=dedupe(base), authorization={"approved": False},
                     output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
                 )
 
@@ -69,8 +74,8 @@ class DispatchIntentTests(unittest.TestCase):
             bad_receipt = {**make_receipt(base), "readback_verified": False}
             with self.assertRaises(DispatchIntentError):
                 create_dispatch_intent(
-                    verified(), report_receipt=bad_receipt, source_policy=policy(),
-                    global_dedupe=dedupe(), authorization=authorization(),
+                    verified(), report_receipt=bad_receipt, source_policy=policy(base),
+                    global_dedupe=dedupe(base), authorization=authorization(base),
                     output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
                 )
 
@@ -81,8 +86,8 @@ class DispatchIntentTests(unittest.TestCase):
             (base / "report-evidence.png").write_bytes(b"changed bytes")
             with self.assertRaises(DispatchIntentError):
                 create_dispatch_intent(
-                    verified(), report_receipt=report, source_policy=policy(),
-                    global_dedupe=dedupe(), authorization=authorization(),
+                    verified(), report_receipt=report, source_policy=policy(base),
+                    global_dedupe=dedupe(base), authorization=authorization(base),
                     output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
                 )
 
@@ -92,8 +97,30 @@ class DispatchIntentTests(unittest.TestCase):
             invalid = {**verified(), "kd": 30}
             with self.assertRaises(DispatchIntentError):
                 create_dispatch_intent(
-                    invalid, report_receipt=make_receipt(base), source_policy=policy(),
-                    global_dedupe=dedupe(), authorization=authorization(),
+                    invalid, report_receipt=make_receipt(base), source_policy=policy(base),
+                    global_dedupe=dedupe(base), authorization=authorization(base),
+                    output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
+                )
+
+    def test_existing_api_source_policy_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            api_policy = {**policy(base), "policy_id": "trendoracle-ready"}
+            with self.assertRaises(DispatchIntentError):
+                create_dispatch_intent(
+                    verified(), report_receipt=make_receipt(base), source_policy=api_policy,
+                    global_dedupe=dedupe(base), authorization=authorization(base),
+                    output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
+                )
+
+    def test_api_benchmark_candidate_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            api_candidate = {**verified(), "discovery_origin": "api_benchmark"}
+            with self.assertRaises(DispatchIntentError):
+                create_dispatch_intent(
+                    api_candidate, report_receipt=make_receipt(base), source_policy=policy(base),
+                    global_dedupe=dedupe(base), authorization=authorization(base),
                     output_root=base / "self-v1", created_at="2026-10-22T10:00:00Z",
                 )
 
@@ -102,8 +129,8 @@ class DispatchIntentTests(unittest.TestCase):
             base = Path(temp)
             with self.assertRaises(Exception):
                 create_dispatch_intent(
-                    verified(), report_receipt=make_receipt(base), source_policy=policy(),
-                    global_dedupe=dedupe(), authorization=authorization(),
+                    verified(), report_receipt=make_receipt(base), source_policy=policy(base),
+                    global_dedupe=dedupe(base), authorization=authorization(base),
                     output_root=base / "production", created_at="2026-10-22T10:00:00Z",
                 )
 
