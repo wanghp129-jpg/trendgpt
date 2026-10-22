@@ -31,6 +31,10 @@ class ChatGPTLeaseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ChatGPTLease(Path(temp) / "chatgpt.lock", owner="", task_id="1")
 
+    def test_relative_lock_path_is_rejected(self):
+        with self.assertRaises(ValueError):
+            ChatGPTLease("relative/chatgpt.lock", owner="test", task_id="1")
+
 
 if __name__ == "__main__":
     unittest.main()
