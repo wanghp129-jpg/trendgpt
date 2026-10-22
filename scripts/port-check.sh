@@ -18,5 +18,8 @@ export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 "$PYTHON_BIN" -m trendgpt.cli --help >/dev/null
 "$PYTHON_BIN" -m trendgpt.adjudicate --help >/dev/null
 "$PYTHON_BIN" -m trendgpt.dispatch_intent --help >/dev/null
+"$PYTHON_BIN" -m trendgpt.chatgpt_queue_cli --help >/dev/null
+"$PYTHON_BIN" -m trendgpt.chatgpt_lock_cli --help >/dev/null
+"$PYTHON_BIN" -m trendgpt.chatgpt_queue_cli validate-browser-registry --input config/browser-instances.example.json >/dev/null
 
 echo "Offline port check passed. No network requests were made by this script."
