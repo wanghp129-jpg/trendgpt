@@ -11,24 +11,23 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Missing data stays unknown; provider failures are not zeroes and are not keyword rejections.
 - API benchmark data is an independent comparison set, never injected into self-discovery results. Benchmark comparison can be disabled without disabling self-discovery.
 
-## Foundation implemented in this branch
+## Implemented in this branch
 
-- Strict JSON loading and initial contract validators.
+- Strict JSON loading and first-pass contract validators.
 - Conservative Unicode/name normalization and exact/known-alias matching.
-- Provider-neutral source result types and a first candidate merge implementation.
+- Provider-neutral source result contracts and candidate merging with unresolved-record preservation.
 - Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. Raw source pages are hash-bound and saved under the explicit self-v1 evidence root.
-- Parsers deliberately report partial/blocked status when they cannot prove full source coverage; a YouTube video title is not automatically treated as a game name.
-- Pure Lesson 14 decision gates, with missing data sent to review instead of being silently rejected.
+- A multi-source collect command with explicit network opt-in, bounded pages, isolated candidate snapshots and per-page artifacts.
+- Pure Lesson 14 decision gates and a provider-injected validation orchestrator. Missing data goes to review rather than silent rejection.
 - Isolated, lock-protected self-v1 run state.
-- Archived API snapshot reader that never calls the API and never copies the private identity field; benchmark readiness remains false without provider update/completeness evidence.
-- API benchmark comparison that reports null coverage unless readiness is established.
-- Descriptive revenue grouping that requires mature observations and partitions by currency and window; it does not change production rules.
-- CLI for artifact validation, archived API snapshots, explicit opt-in source reads, benchmark comparison and descriptive evaluation.
-- GitHub Actions unit-test workflow.
+- Archived API snapshot reader that never calls the API and never copies the private identity field; benchmark readiness remains false without update/completeness evidence.
+- API benchmark comparison and a descriptive mature-revenue evaluator that does not change production rules.
+- CLI for validation, source collection, archived API snapshots, benchmark comparison and descriptive evaluation.
+- Initial OpenClaw Skill contracts and a GitHub Actions unit-test workflow.
 
-## What is not yet production-ready
+## Not yet production-ready
 
-The public source adapters have not been validated against current live pages in this development environment. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, the approved self-source adapter for website_create, complete multi-round orchestration, and historical rule replay/shadow evaluation remain staged work. Contracts and prerequisites are documented, but these integrations must not be represented as working until verified.
+The public source adapters have only been fixture-tested; current live-page accessibility and full pagination are not yet verified. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and historical rule replay/shadow evaluation remain staged work. The current validation orchestrator is provider-injected and is not wired to live providers. Do not represent these integrations as working until verified.
 
 ## Local use
 
@@ -42,25 +41,21 @@ PYTHONPATH=src python -m unittest discover -s tests -v
 trendgpt --help
 ```
 
-Examples:
+Review the sample plan before any live read:
 
 ```bash
-trendgpt validate --kind candidate --input /path/to/candidate_keywords.json
-trendgpt snapshot-api --input /private/archive/raw.json --output-root /safe/path/self-v1 --acquired-at 2026-10-22T08:10:00+08:00
-trendgpt compare --benchmark /safe/path/api_benchmark_snapshot.json --self-snapshot /safe/path/candidate_keywords.json --cutoff 2026-10-22T08:00:00+08:00
-trendgpt evaluate-rules --input /path/to/mature_observations.json --minimum-samples 5
+trendgpt collect --source-plan config/source-plan.example.json --run-id manual-review-01 --date 2026-10-22 --slot 00 --timezone Asia/Shanghai --started-at 2026-10-22T00:00:00+08:00 --output-root /safe/path/self-v1 --network-enabled
 ```
 
-Network reads require explicit opt-in. Prepare a JSON scope file first, then call e.g.:
+The example run command performs public source requests. Do not run it until current source accessibility, use limits, server egress and output path have been approved. Network collection is disabled unless the explicit `--network-enabled` flag is supplied. The API snapshot command reads local raw files only. The benchmark comparator does not call the API. Revenue evaluation is descriptive and never modifies a ruleset.
 
-```bash
-trendgpt fetch-source --source steam --scope-json /path/to/steam-scope.json --run-id local-review-01 --fetched-at 2026-10-22T08:00:00+08:00 --output-root /safe/path/self-v1 --page-limit 50 --network-enabled
-```
+## Skills and docs
 
-Do not run live collection until the source's current accessibility, use limits, server egress and output path have been approved. The comparison command reads local JSON files only; the rules command is descriptive and never modifies a ruleset.
-
-## Documentation
-
+- `skills/trends-miner/SKILL.md` — source discovery contract.
+- `skills/trends-valid/SKILL.md` — validation contract and current dependency gaps.
+- `skills/trends-daily-pipeline/SKILL.md` — future orchestration contract.
+- `skills/keyword-feedback-loop/SKILL.md` — API comparison and feedback contract.
+- `skills/keyword-rule-optimizer/SKILL.md` — rule evaluation and release boundaries.
 - `docs/ARCHITECTURE.md` — architecture and production boundaries.
 - `docs/DATA_CONTRACTS.md` — proposed self-v1 data contracts.
 - `docs/INTERFACES.md` — existing vs proposed integration status.
