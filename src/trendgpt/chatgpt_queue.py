@@ -40,7 +40,7 @@ def _safe_relative(value: str) -> bool:
     return bool(value) and not path.is_absolute() and ".." not in path.parts
 
 
-def _verify_ref(ref: Any, *, require_file: bool = True) -> bool:
+def _verify_ref(ref: Any) -> bool:
     if not isinstance(ref, dict):
         return False
     path, digest = ref.get("path"), ref.get("sha256")
@@ -71,6 +71,15 @@ class ChatGPTTaskQueue:
         self.state_path = self.directory / "queue.json"
         self.lock_path = self.directory / "queue.lock"
 
+    def _require_inside_root(self, path: str | Path) -> Path:
+        target = Path(path).absolute()
+        reject_symlink_components(target)
+        try:
+            target.relative_to(self.root)
+        except ValueError as exc:
+            raise StorageError("queue artifacts must stay inside the self-v1 root") from exc
+        return target
+
     @contextmanager
     def _locked(self) -> Iterator[None]:
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -84,15 +93,11 @@ class ChatGPTTaskQueue:
 
     def _load_unlocked(self) -> dict[str, Any]:
         if not self.state_path.exists():
-            return {
-                "schema": "trendgpt-chatgpt-queue-v1",
-                "revision": 0,
-                "tasks": [],
-            }
+            return {"schema": "trendgpt-chatgpt-queue-v1", "revision": 0, "tasks": []}
         state = load_json(self.state_path)
         if not isinstance(state, dict) or state.get("schema") != "trendgpt-chatgpt-queue-v1":
             raise ContractError("invalid ChatGPT queue state schema")
-        if not isinstance(state.get("revision"), int) or not isinstance(state.get("tasks"), list):
+        if isinstance(state.get("revision"), bool) or not isinstance(state.get("revision"), int) or not isinstance(state.get("tasks"), list):
             raise ContractError("invalid ChatGPT queue state fields")
         for index, task in enumerate(state["tasks"]):
             if not isinstance(task, dict) or task.get("status") not in TASK_STATES:
@@ -119,6 +124,7 @@ class ChatGPTTaskQueue:
             raise ValueError(f"unsupported task_type: {task_type}")
         if not _verify_ref(input_ref):
             raise ValueError("input_ref must point to an existing file with a matching SHA-256 digest")
+        self._require_inside_root(input_ref["path"])
         if not _safe_relative(output_relative):
             raise ValueError("output_relative must be a safe relative path")
         if not isinstance(idempotency_key, str) or not idempotency_key.strip():
@@ -209,17 +215,15 @@ class ChatGPTTaskQueue:
     ) -> dict[str, Any]:
         if not _verify_ref(result_ref):
             raise ValueError("result_ref must point to an existing file with a matching SHA-256 digest")
+        self._require_inside_root(result_ref["path"])
         completed_at = completed_at or _utc_now()
         _parse_time(completed_at)
         with self._locked():
             state = self._load_unlocked()
             task = self._find_lease(state, task_id, lease_token)
             task.update({
-                "status": "completed",
-                "completed_at": completed_at,
-                "result_ref": result_ref,
-                "lease": None,
-                "failure": None,
+                "status": "completed", "completed_at": completed_at,
+                "result_ref": result_ref, "lease": None, "failure": None,
             })
             self._save_unlocked(state)
             return {"status": "completed", "task": task, "revision": state["revision"]}
@@ -252,23 +256,15 @@ class ChatGPTTaskQueue:
             else:
                 status = "failed"
             task.update({
-                "status": status,
-                "failed_at": failed_at,
-                "failure": {
-                    "code": error_code,
-                    "disposition": disposition,
-                    "retryable": status == "queued",
-                },
+                "status": status, "failed_at": failed_at,
+                "failure": {"code": error_code, "disposition": disposition, "retryable": status == "queued"},
                 "lease": None,
             })
             self._save_unlocked(state)
             return {"status": status, "task": task, "revision": state["revision"]}
 
     def reconcile_stale_running(
-        self,
-        *,
-        now: str | None = None,
-        max_age_seconds: int = 1800,
+        self, *, now: str | None = None, max_age_seconds: int = 1800,
     ) -> dict[str, Any]:
         """Move stale running tasks to needs_review; never resubmit an uncertain prompt."""
         if isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, int) or max_age_seconds < 1:
@@ -289,8 +285,7 @@ class ChatGPTTaskQueue:
                 if age > max_age_seconds:
                     task["status"] = "needs_review"
                     task["failure"] = {
-                        "code": "stale_running_lease",
-                        "disposition": "needs_review",
+                        "code": "stale_running_lease", "disposition": "needs_review",
                         "retryable": False,
                         "note": "submission/result may be uncertain; reconcile before retry",
                     }
