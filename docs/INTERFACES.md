@@ -4,10 +4,10 @@ This file distinguishes existing integrations from proposed interfaces. A propos
 
 | Interface | Status in foundation | Expected contract |
 | --- | --- | --- |
-| API benchmark read | Offline comparison exists; snapshot reader pending | Read an immutable archived snapshot; do not trigger the production API fetcher |
+| API benchmark read | Offline archive converter and comparison exist | Reads an immutable local raw snapshot; never triggers the production API fetcher; defaults to benchmark_not_ready |
 | Site registry read | Pending server adapter | Read site.json and in-flight task evidence; never mutate site.json |
-| Source fetch | Provider-neutral dataclasses exist; live adapters pending | One bounded page per call, original source IDs, pagination, completeness, raw evidence, errors |
-| Candidate normalization | Exact name normalization and source-record merge exist | Stable IDs preferred; ambiguity preserved |
+| Source fetch | Steam, Roblox and YouTube RSS adapters implemented but live access unverified | One bounded page/feed per call, source IDs, pagination hints, partial status, raw evidence and errors |
+| Candidate normalization | Exact name normalization and source-record merge exist | Stable IDs preferred; ambiguous cross-platform matches preserved; unresolved video titles stay unparsed |
 | KD query | Not implemented | Real Similarweb difficulty plus matching query/market and screenshot evidence |
 | Trend prefilter | Not implemented; dependency unverified | DataForSEO task intent, task ID, aligned series and explicit cost controls |
 | Google Trends verification | Not implemented | Candidate and GPTs comparison from the same request, final curve data and same-time screenshot |
