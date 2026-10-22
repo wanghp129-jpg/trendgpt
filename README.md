@@ -30,7 +30,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 
 ## Not yet production-ready
 
-The public source adapters have only been fixture-tested; current live-page accessibility and full pagination are not yet verified. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, in-flight production task reconciliation, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and rule release/shadow scheduling remain staged work. The current validation orchestrator is provider-injected and is not wired to live providers. Do not represent these integrations as working until verified.
+The public source adapters have only been fixture-tested; current live-page accessibility and full pagination are not yet verified. The 9226/9227 Chrome instances are not configured by this repository. The actual Playwright/CDP ChatGPT cleaner worker and strict output-schema validation are still pending. Existing `code_before` scripts have not yet been wired to the shared lock; until they are, the lock cannot prevent those scripts from running concurrently. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, in-flight production task reconciliation, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and rule release/shadow scheduling remain staged work.
 
 ## Local use
 
@@ -44,7 +44,16 @@ bash scripts/port-check.sh
 trendgpt --help
 trendgpt-adjudicate --help
 trendgpt-dispatch-intent --help
+trendgpt-queue --help
+trendgpt-chatgpt-lease --help
+trendgpt-queue validate-browser-registry --input config/browser-instances.example.json
 ```
+
+The browser registry command validates the JSON plan only; it does not check whether CDP ports are live. Queue state must be stored under an explicitly selected path ending in `self-v1`.
+
+## Browser and ChatGPT coordination
+
+Read [docs/BROWSER_AND_CHATGPT_COORDINATION.md](docs/BROWSER_AND_CHATGPT_COORDINATION.md) before configuring ports or running the queue. The global lock path must be chosen on the VPS and must be identical for TrendGPT and every cooperating `code_before` ChatGPT stage. The example path is a placeholder. A lock only protects processes that actually acquire it.
 
 Review the sample plan before any live read:
 
@@ -66,5 +75,6 @@ The example collection command performs public source requests. Do not run it un
 - `docs/INTERFACES.md` — existing vs proposed integration status.
 - `docs/IMPLEMENTATION_PLAN.md` — staged build plan.
 - `docs/PORTING.md` — safe migration guide.
-- `docs/BROWSER_AND_CHATGPT_COORDINATION.md` — port roles, global lock, queue lifecycle and safe migration.
+- `docs/BROWSER_AND_CHATGPT_COORDINATION.md` — browser roles, global lock, queue lifecycle and safe migration.
 - `config/example.json` — illustrative configuration only; review all values before use.
+- `config/browser-instances.example.json` — port plan; 9226/9227 are not configured by this file.
