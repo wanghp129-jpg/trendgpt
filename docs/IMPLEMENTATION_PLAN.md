@@ -17,6 +17,17 @@ This repository is a staged, portable implementation. A component is not conside
 - [ ] Validate public source parsers against current live pages in an approved environment.
 - [ ] Review contract fields against a real, redacted local snapshot before relying on the schema in production.
 
+## Stage 1.5 — browser roles and ChatGPT coordination
+
+- [x] Define the browser port registry with 9226/9227 explicitly marked planned, not configured.
+- [x] Implement an OS-level shared ChatGPT lock and command wrapper.
+- [x] Implement a durable self-v1 ChatGPT queue with idempotency, lease tokens, hash-verified artifacts, and conservative stale-run recovery.
+- [x] Add offline tests for lock exclusion, queue idempotency, lease checks, and safe failure handling.
+- [ ] Configure and verify 9226 and 9227 on the target VPS without altering existing browser instances.
+- [ ] Select the actual shared lock path and integrate it into every `code_before` ChatGPT stage.
+- [ ] Implement the Playwright/CDP ChatGPT cleaner worker and validate its output schema.
+- [ ] Run an end-to-end shadow batch; verify task ownership, screenshot/evidence, output correctness, and no cross-task contamination.
+
 ## Stage 2 — source discovery
 
 1. Validate the Roblox Up-and-Coming and Top Playing Now adapters against current pages, stable identifiers, region/device scope and coverage.
