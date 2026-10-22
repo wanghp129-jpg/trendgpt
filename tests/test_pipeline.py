@@ -59,12 +59,12 @@ class SourceMergeTests(unittest.TestCase):
         one = SourceResult(
             source_id="roblox-upcoming", status="complete", fetched_at="2026-10-22T00:00:00Z",
             scope={"list_type": "upcoming"},
-            items=[{"title": "Game A", "platform": "roblox", "platform_id": "123", "url": "https://example.test/a"}],
+            items=[{"name": "Game A", "platform": "roblox", "platform_id": "123", "url": "https://example.test/a"}],
         )
         two = SourceResult(
             source_id="roblox-popular", status="complete", fetched_at="2026-10-22T00:02:00Z",
             scope={"list_type": "popular"},
-            items=[{"title": "Game A", "platform": "roblox", "platform_id": "123", "url": "https://example.test/a"}],
+            items=[{"name": "Game A", "platform": "roblox", "platform_id": "123", "url": "https://example.test/a"}],
         )
         snapshot = merge_source_results(
             [one, two], run_id="r1", run_date="2026-10-22", slot="00",
