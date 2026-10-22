@@ -1,0 +1,46 @@
+{
+  "schema": "trendgpt-config-v1",
+  "runtime": {
+    "timezone": "Asia/Shanghai",
+    "output_root": "/CHANGE-ME/to/output/self-v1",
+    "max_candidates_per_run": 25,
+    "max_attempts_per_read": 3
+  },
+  "benchmark": {
+    "enabled": true,
+    "expected_update_windows": ["00:00", "08:00"],
+    "timezone": "Asia/Shanghai",
+    "max_age_seconds": null,
+    "read_archived_snapshot_only": true
+  },
+  "validation": {
+    "kd_threshold": 30,
+    "kd_operator": "<",
+    "dataforseo": {
+      "enabled": false,
+      "N1": null,
+      "N2": null,
+      "M": null,
+      "budget_per_run": null
+    },
+    "google_trends": {
+      "comparison_keyword": "GPTs",
+      "window": "past_30_days",
+      "requires_browser_final_review": true
+    }
+  },
+  "dispatch": {
+    "enabled": false,
+    "require_report_confirmation": true,
+    "require_source_policy_approval": true,
+    "require_global_dedupe": true,
+    "require_explicit_authorization": true
+  },
+  "rule_optimizer": {
+    "enabled": false,
+    "production_mutation": false,
+    "minimum_samples": null,
+    "minimum_mature_observations": null,
+    "shadow_only": true
+  }
+}
