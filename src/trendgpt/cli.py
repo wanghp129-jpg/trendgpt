@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from .benchmark import compare_snapshots
 from .benchmark_snapshot import read_archived_api_snapshot
 from .contracts import ContractError, validate_file, load_json
 from .rules import evaluate_feature_groups
-from .sources import SourceRequest
+from .sources import SourceRequest, merge_source_results
 from .storage import StorageError, atomic_write_json
 
 
@@ -43,6 +44,17 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--page-limit", type=int, default=50)
     fetch.add_argument("--network-enabled", action="store_true", help="explicit opt-in to a public HTTPS read")
 
+    collect = sub.add_parser("collect", help="collect a bounded multi-source candidate snapshot")
+    collect.add_argument("--source-plan", required=True, help="JSON file using config/source-plan.example.json shape")
+    collect.add_argument("--run-id", required=True)
+    collect.add_argument("--date", required=True, help="YYYY-MM-DD in the configured business timezone")
+    collect.add_argument("--slot", required=True, help="caller-supplied run slot, e.g. 00, 04, 08")
+    collect.add_argument("--timezone", required=True, help="IANA business timezone")
+    collect.add_argument("--started-at", required=True, help="RFC3339 timestamp with timezone")
+    collect.add_argument("--output-root", required=True, help="explicit path ending in self-v1")
+    collect.add_argument("--max-pages-per-source", type=int, default=3)
+    collect.add_argument("--network-enabled", action="store_true", help="explicit opt-in to public HTTPS reads")
+
     compare = sub.add_parser("compare", help="compare an API benchmark to self-discovery snapshots")
     compare.add_argument("--benchmark", required=True)
     compare.add_argument("--self-snapshot", action="append", default=[])
@@ -53,6 +65,19 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--input", required=True, help="JSON array of observation records")
     evaluate.add_argument("--minimum-samples", type=int, default=5)
     return parser
+
+
+def _make_adapter(source: str):
+    if source == "steam":
+        from .adapters.steam import SteamSearchAdapter
+        return SteamSearchAdapter()
+    if source == "roblox":
+        from .adapters.roblox import RobloxChartAdapter
+        return RobloxChartAdapter()
+    if source == "youtube":
+        from .adapters.youtube_rss import YouTubeRssAdapter
+        return YouTubeRssAdapter()
+    raise ContractError(f"unknown source: {source}")
 
 
 def _fetch_source(args: argparse.Namespace) -> dict[str, Any]:
@@ -66,29 +91,96 @@ def _fetch_source(args: argparse.Namespace) -> dict[str, Any]:
         raise ContractError("scope JSON must be an object")
     if args.page_limit < 1 or args.page_limit > 50:
         raise ContractError("page-limit must be between 1 and 50")
-    if args.source == "steam":
-        from .adapters.steam import SteamSearchAdapter
-        adapter = SteamSearchAdapter()
-    elif args.source == "roblox":
-        from .adapters.roblox import RobloxChartAdapter
-        adapter = RobloxChartAdapter()
-    else:
-        from .adapters.youtube_rss import YouTubeRssAdapter
-        adapter = YouTubeRssAdapter()
     request = SourceRequest(
         run_id=args.run_id, source_id=args.source, fetched_at=args.fetched_at,
         scope=scope, evidence_root=str(root), cursor=args.cursor, page_limit=args.page_limit,
     )
-    result = adapter.fetch(request).validate()
+    result = _make_adapter(args.source).fetch(request).validate()
     run_key = sha256(args.run_id.encode("utf-8")).hexdigest()[:16]
     cursor_key = args.cursor or "first"
     output_path = root / "runs" / run_key / f"{args.source}-{cursor_key}.json"
     atomic_write_json(output_path, result.to_dict(), root=root)
     return {
-        "status": result.status, "source_id": result.source_id,
-        "items": len(result.items), "next_cursor": result.next_cursor,
-        "evidence_refs": result.evidence_refs, "errors": result.errors,
-        "output_path": str(output_path), "network_requests": 1,
+        "status": result.status, "source_id": result.source_id, "items": len(result.items),
+        "next_cursor": result.next_cursor, "evidence_refs": result.evidence_refs,
+        "errors": result.errors, "output_path": str(output_path), "network_requests": 1,
+    }
+
+
+def _collect(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.network_enabled:
+        raise ContractError("collection is disabled by default; pass --network-enabled for explicit public reads")
+    root = Path(args.output_root).absolute()
+    if root.name != "self-v1":
+        raise ContractError("output root must end in self-v1")
+    if args.max_pages_per_source < 1 or args.max_pages_per_source > 10:
+        raise ContractError("max-pages-per-source must be between 1 and 10")
+    plan = load_json(args.source_plan)
+    if not isinstance(plan, dict) or plan.get("schema") != "trendgpt-source-plan-v1" or not isinstance(plan.get("sources"), list):
+        raise ContractError("source plan must use schema trendgpt-source-plan-v1 with a sources array")
+    started = datetime.fromisoformat(args.started_at.replace("Z", "+00:00"))
+    if started.tzinfo is None:
+        raise ContractError("started-at must include a timezone offset")
+    collected_at = datetime.now(timezone.utc).isoformat()
+    run_key = sha256(args.run_id.encode("utf-8")).hexdigest()[:16]
+    source_results = []
+    source_summary = []
+
+    for source_index, spec in enumerate(plan["sources"]):
+        if not isinstance(spec, dict) or spec.get("source") not in {"steam", "roblox", "youtube"}:
+            raise ContractError(f"source plan entry {source_index} has an invalid source")
+        source = spec["source"]
+        scope = spec.get("scope")
+        if not isinstance(scope, dict):
+            raise ContractError(f"source plan entry {source_index} requires a scope object")
+        page_limit = int(spec.get("page_limit", 50))
+        configured_max = int(spec.get("max_pages", args.max_pages_per_source))
+        max_pages = min(configured_max, args.max_pages_per_source)
+        if page_limit < 1 or page_limit > 50 or max_pages < 1:
+            raise ContractError(f"source plan entry {source_index} has invalid page limits")
+        cursor = None
+        pages = []
+        adapter = _make_adapter(source)
+        for page_number in range(max_pages):
+            request = SourceRequest(
+                run_id=f"{args.run_id}-{source_index}", source_id=source,
+                fetched_at=datetime.now(timezone.utc).isoformat(),
+                scope={**scope, "source_plan_index": source_index},
+                evidence_root=str(root), cursor=cursor, page_limit=page_limit,
+            )
+            result = adapter.fetch(request).validate()
+            pages.append(result)
+            source_results.append(result)
+            page_name = cursor or "first"
+            page_path = root / "runs" / run_key / f"{source}-{source_index}-page-{page_name}.json"
+            atomic_write_json(page_path, result.to_dict(), root=root)
+            if result.status in {"failed", "blocked"} or not result.next_cursor:
+                break
+            cursor = result.next_cursor
+        source_summary.append({
+            "source": source, "source_plan_index": source_index,
+            "pages": len(pages), "statuses": [page.status for page in pages],
+            "items": sum(len(page.items) for page in pages),
+            "last_cursor": pages[-1].cursor if pages else None,
+            "next_cursor": pages[-1].next_cursor if pages else None,
+        })
+
+    snapshot = merge_source_results(
+        source_results, run_id=args.run_id, run_date=args.date, slot=args.slot,
+        timezone=args.timezone, started_at=args.started_at, collected_at=collected_at,
+        cutoff_at=collected_at, code_version="0.1.0",
+        normalization_version="candidate-normalizer-v1",
+        source_policy_version="source-plan-v1",
+    )
+    candidate_path = root / "runs" / run_key / "candidate_keywords.json"
+    atomic_write_json(candidate_path, snapshot, root=root)
+    return {
+        "status": snapshot["collection_status"], "run_id": args.run_id,
+        "candidate_count": len(snapshot["candidates"]),
+        "unparsed_count": snapshot["counts"]["unparsed_records"],
+        "source_summary": source_summary, "candidate_path": str(candidate_path),
+        "network_requests": sum(len(item["statuses"]) for item in source_summary),
+        "note": "partial coverage is retained honestly; no KD, trend decision, API injection, or build dispatch occurs",
     }
 
 
@@ -109,6 +201,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "fetch-source":
             result = _fetch_source(args)
+            _print(result)
+            return 0 if result["status"] in {"complete", "partial"} else 2
+        if args.command == "collect":
+            result = _collect(args)
             _print(result)
             return 0 if result["status"] in {"complete", "partial"} else 2
         if args.command == "compare":
