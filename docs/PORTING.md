@@ -14,6 +14,15 @@ Do not copy this repository over the existing OpenClaw tree wholesale. Port only
 8. Do not call the archived API snapshot reader with a live fetcher. It reads an already archived raw file and defaults the benchmark to `benchmark_not_ready` when freshness/completeness cannot be proven.
 9. The dispatch-intent CLI creates only an intent record under `self-v1`. It never calls `website_create`; all evidence, policy, global dedupe and authorization gates must be real and hash-verified.
 
+## Browser instances and shared ChatGPT lock
+
+1. Review `config/browser-instances.example.json`; it documents intended roles only. It does not configure Chrome or prove a port is listening.
+2. Keep 9221, 9223, 9224 and 9225 unchanged. Treat 9226 (source collection) and 9227 (ChatGPT cleaner) as planned until the VPS operator separately configures and verifies them.
+3. Choose one real absolute lock-file path accessible to the TrendGPT service and the `code_before` runtime. Replace the `/CHANGE-ME/` placeholder in deployment configuration; do not create the lock under an ephemeral directory.
+4. Wire each `code_before` ChatGPT stage and the new cleaner to the exact same lock path. The lock must cover submit, wait, extraction, validation and output save. Merely assigning different CDP ports does not coordinate account-level ChatGPT use.
+5. Run `trendgpt-queue validate-browser-registry --input config/browser-instances.example.json` and `bash scripts/port-check.sh` before deploying. These are offline checks and do not probe or start Chrome.
+6. The generic queue worker interface exists, but the actual Playwright/CDP cleaning worker and output schema acceptance are still pending. Do not enable a timer or real cleaning batch before those tests pass.
+
 ## Current integration gaps
 
 The current foundation has public-source adapters and a provider-injected validation orchestrator, but no live Similarweb KD automation, DataForSEO task integration, final Google Trends browser review, batch domain availability adapter, Feishu valid-report/image writer, in-flight production task reconciler, or approved self-source `website_create` adapter. The existing server's `write-table-doc.sh` does not prove that the required candidate-block/screenshot valid report contract is implemented.
