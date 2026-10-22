@@ -19,15 +19,15 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. Raw source pages are hash-bound and saved under the explicit self-v1 evidence root.
 - A multi-source collect command with explicit network opt-in, bounded pages, isolated candidate snapshots and per-page artifacts.
 - Pure Lesson 14 decision gates and a provider-injected validation orchestrator. Missing data goes to review rather than silent rejection.
-- Isolated, lock-protected self-v1 run state.
+- Read-only site registry matching, isolated lock-protected self-v1 run state and deterministic rule replay.
 - Archived API snapshot reader that never calls the API and never copies the private identity field; benchmark readiness remains false without update/completeness evidence.
 - API benchmark comparison and a descriptive mature-revenue evaluator that does not change production rules.
-- CLI for validation, source collection, archived API snapshots, benchmark comparison and descriptive evaluation.
+- CLI for validation, source collection, archived API snapshots, benchmark comparison, descriptive evaluation and frozen rule replay.
 - Initial OpenClaw Skill contracts and a GitHub Actions unit-test workflow.
 
 ## Not yet production-ready
 
-The public source adapters have only been fixture-tested; current live-page accessibility and full pagination are not yet verified. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and historical rule replay/shadow evaluation remain staged work. The current validation orchestrator is provider-injected and is not wired to live providers. Do not represent these integrations as working until verified.
+The public source adapters have only been fixture-tested; current live-page accessibility and full pagination are not yet verified. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and rule release/shadow scheduling remain staged work. The current validation orchestrator is provider-injected and is not wired to live providers. Do not represent these integrations as working until verified.
 
 ## Local use
 
@@ -47,7 +47,7 @@ Review the sample plan before any live read:
 trendgpt collect --source-plan config/source-plan.example.json --run-id manual-review-01 --date 2026-10-22 --slot 00 --timezone Asia/Shanghai --started-at 2026-10-22T00:00:00+08:00 --output-root /safe/path/self-v1 --network-enabled
 ```
 
-The example run command performs public source requests. Do not run it until current source accessibility, use limits, server egress and output path have been approved. Network collection is disabled unless the explicit `--network-enabled` flag is supplied. The API snapshot command reads local raw files only. The benchmark comparator does not call the API. Revenue evaluation is descriptive and never modifies a ruleset.
+The example run command performs public source requests. Do not run it until current source accessibility, use limits, server egress and output path have been approved. Network collection is disabled unless the explicit `--network-enabled` flag is supplied. The API snapshot command reads local raw files only. The benchmark comparator does not call the API. Revenue evaluation and rule replay are descriptive/offline and never modify a ruleset.
 
 ## Skills and docs
 
