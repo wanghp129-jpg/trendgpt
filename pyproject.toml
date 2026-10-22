@@ -12,6 +12,7 @@ dependencies = []
 [project.scripts]
 trendgpt = "trendgpt.cli:main"
 trendgpt-adjudicate = "trendgpt.adjudicate:main"
+trendgpt-dispatch-intent = "trendgpt.dispatch_intent:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
