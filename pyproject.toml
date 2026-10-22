@@ -13,6 +13,8 @@ dependencies = []
 trendgpt = "trendgpt.cli:main"
 trendgpt-adjudicate = "trendgpt.adjudicate:main"
 trendgpt-dispatch-intent = "trendgpt.dispatch_intent:main"
+trendgpt-queue = "trendgpt.chatgpt_queue_cli:main"
+trendgpt-chatgpt-lease = "trendgpt.chatgpt_lock_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
