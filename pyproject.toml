@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trendgpt"
+version = "0.1.0"
+description = "Isolated, portable new-game discovery and evaluation pipeline"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+trendgpt = "trendgpt.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
