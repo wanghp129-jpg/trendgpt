@@ -41,26 +41,6 @@ def _parser() -> argparse.ArgumentParser:
     listing = sub.add_parser("list")
     listing.add_argument("--output-root", required=True)
 
-    claim = sub.add_parser("claim")
-    claim.add_argument("--output-root", required=True)
-    claim.add_argument("--owner", required=True)
-    claim.add_argument("--claimed-at")
-
-    complete = sub.add_parser("complete")
-    complete.add_argument("--output-root", required=True)
-    complete.add_argument("--task-id", required=True)
-    complete.add_argument("--lease-token", required=True)
-    complete.add_argument("--output-file", required=True)
-    complete.add_argument("--completed-at")
-
-    fail = sub.add_parser("fail")
-    fail.add_argument("--output-root", required=True)
-    fail.add_argument("--task-id", required=True)
-    fail.add_argument("--lease-token", required=True)
-    fail.add_argument("--disposition", choices=("safe_retry", "needs_review", "permanent"), required=True)
-    fail.add_argument("--error-code", required=True)
-    fail.add_argument("--failed-at")
-
     reconcile = sub.add_parser("reconcile")
     reconcile.add_argument("--output-root", required=True)
     reconcile.add_argument("--now")
@@ -168,24 +148,6 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "list":
             _print(_queue(args.output_root).list_tasks())
-            return 0
-        if args.command == "claim":
-            _print(_queue(args.output_root).claim_next(owner=args.owner, claimed_at=args.claimed_at) or {"status": "idle"})
-            return 0
-        if args.command == "complete":
-            output = Path(args.output_file).absolute()
-            output_root = Path(args.output_root).absolute()
-            ref = evidence_ref(output, root=output_root)
-            _print(_queue(args.output_root).complete(
-                task_id=args.task_id, lease_token=args.lease_token,
-                result_ref=ref, completed_at=args.completed_at,
-            ))
-            return 0
-        if args.command == "fail":
-            _print(_queue(args.output_root).fail(
-                task_id=args.task_id, lease_token=args.lease_token,
-                disposition=args.disposition, error_code=args.error_code, failed_at=args.failed_at,
-            ))
             return 0
         if args.command == "reconcile":
             _print(_queue(args.output_root).reconcile_stale_running(
