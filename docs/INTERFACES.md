@@ -5,6 +5,7 @@ This file distinguishes implemented offline logic from unverified server integra
 | Interface | Status in foundation | Expected contract |
 | --- | --- | --- |
 | API benchmark read | Offline archive converter and comparison exist | Reads an immutable local raw snapshot; never triggers the production API fetcher; defaults to benchmark_not_ready |
+| Browser registry / ChatGPT coordination | Registry validation, shared OS lock, durable queue and generic worker CLI exist | 9226/9227 are planned only; every cooperating ChatGPT caller must use the same real lock path; actual browser cleaner and code_before integration remain pending |
 | Site registry read | Read-only site.json schema check and direct-name lookup exist | Never mutates site.json; keyword-only collisions are review items, not hard duplicates; live in-flight task reconciliation remains pending |
 | Source fetch | Steam, Roblox and YouTube RSS adapters implemented but live access unverified | One bounded page/feed per call, source IDs, pagination hints, partial status, raw evidence and errors |
 | Candidate normalization | Exact name normalization and source-record merge exist | Stable IDs preferred; ambiguous cross-platform matches preserved; unresolved video titles stay unparsed; independence eligibility is not assumed |
