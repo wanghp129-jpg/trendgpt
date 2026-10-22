@@ -4,10 +4,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .benchmark import compare_snapshots
 from .benchmark_snapshot import read_archived_api_snapshot
@@ -103,7 +104,7 @@ def _fetch_source(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "status": result.status, "source_id": result.source_id, "items": len(result.items),
         "next_cursor": result.next_cursor, "evidence_refs": result.evidence_refs,
-        "errors": result.errors, "output_path": str(output_path), "network_requests": 1,
+        "errors": result.errors, "output_path": str(output_path), "source_fetch_calls": 1,
     }
 
 
@@ -115,13 +116,17 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
         raise ContractError("output root must end in self-v1")
     if args.max_pages_per_source < 1 or args.max_pages_per_source > 10:
         raise ContractError("max-pages-per-source must be between 1 and 10")
+    try:
+        date.fromisoformat(args.date)
+        ZoneInfo(args.timezone)
+        started = datetime.fromisoformat(args.started_at.replace("Z", "+00:00"))
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise ContractError("date, timezone, or started-at is invalid") from exc
+    if started.tzinfo is None:
+        raise ContractError("started-at must include a timezone offset")
     plan = load_json(args.source_plan)
     if not isinstance(plan, dict) or plan.get("schema") != "trendgpt-source-plan-v1" or not isinstance(plan.get("sources"), list):
         raise ContractError("source plan must use schema trendgpt-source-plan-v1 with a sources array")
-    started = datetime.fromisoformat(args.started_at.replace("Z", "+00:00"))
-    if started.tzinfo is None:
-        raise ContractError("started-at must include a timezone offset")
-    collected_at = datetime.now(timezone.utc).isoformat()
     run_key = sha256(args.run_id.encode("utf-8")).hexdigest()[:16]
     source_results = []
     source_summary = []
@@ -141,7 +146,7 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
         cursor = None
         pages = []
         adapter = _make_adapter(source)
-        for page_number in range(max_pages):
+        for _page_number in range(max_pages):
             request = SourceRequest(
                 run_id=f"{args.run_id}-{source_index}", source_id=source,
                 fetched_at=datetime.now(timezone.utc).isoformat(),
@@ -165,6 +170,7 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "next_cursor": pages[-1].next_cursor if pages else None,
         })
 
+    collected_at = datetime.now(timezone.utc).isoformat()
     snapshot = merge_source_results(
         source_results, run_id=args.run_id, run_date=args.date, slot=args.slot,
         timezone=args.timezone, started_at=args.started_at, collected_at=collected_at,
@@ -179,7 +185,7 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
         "candidate_count": len(snapshot["candidates"]),
         "unparsed_count": snapshot["counts"]["unparsed_records"],
         "source_summary": source_summary, "candidate_path": str(candidate_path),
-        "network_requests": sum(len(item["statuses"]) for item in source_summary),
+        "source_fetch_calls": sum(len(item["statuses"]) for item in source_summary),
         "note": "partial coverage is retained honestly; no KD, trend decision, API injection, or build dispatch occurs",
     }
 
