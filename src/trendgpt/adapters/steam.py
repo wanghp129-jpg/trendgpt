@@ -1,10 +1,12 @@
 """Steam recent-release/popular-new-release HTML adapter; one bounded page per call."""
 from __future__ import annotations
 
+from hashlib import sha256
 from html.parser import HTMLParser
 from urllib.parse import urlencode
 
 from ..sources import SourceRequest, SourceResult
+from ..storage import StorageError, store_text_evidence
 from .http import SourceFetchError, get_public_text
 
 
@@ -72,6 +74,16 @@ class SteamSearchAdapter:
         except SourceFetchError as exc:
             return SourceResult(self.source_id, "failed", request.fetched_at, request.scope,
                                 errors=[{"code": exc.code, "retryable": exc.retryable}])
+        run_key = sha256(request.run_id.encode("utf-8")).hexdigest()[:16]
+        try:
+            raw_ref = store_text_evidence(
+                html, output_root=request.evidence_root,
+                relative_path=f"evidence/sources/steam/{run_key}/{list_type}-{start}.html",
+                media_type="text/html",
+            )
+        except StorageError:
+            return SourceResult(self.source_id, "failed", request.fetched_at, request.scope,
+                                errors=[{"code": "evidence_write_failed", "retryable": False}])
         parser = _SteamResults()
         parser.feed(html)
         items = parser.items
@@ -80,13 +92,13 @@ class SteamSearchAdapter:
         if not items:
             return SourceResult(self.source_id, "blocked", request.fetched_at, request.scope,
                                 coverage={"url": url, "page_start": start},
+                                evidence_refs=[raw_ref],
                                 errors=[{"code": "parse_no_results", "retryable": False}])
         next_cursor = str(start + len(items)) if len(items) >= page_size else None
-        # The HTML parser does not prove total-result completeness, even if a page is short.
         return SourceResult(
             self.source_id, "partial", request.fetched_at,
             {**request.scope, "url": url, "list_type": list_type}, items=items,
-            cursor=str(start), next_cursor=next_cursor,
+            cursor=str(start), next_cursor=next_cursor, evidence_refs=[raw_ref],
             coverage={"page_start": start, "page_size": page_size, "parsed_items": len(items),
                       "pagination_complete": False,
                       "note": "HTML parser has not verified source total or full pagination"},
