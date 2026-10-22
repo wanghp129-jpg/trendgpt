@@ -12,8 +12,16 @@ The current API system is a separate production pipeline. TrendGPT must not writ
 - `trendgpt.state`: lock-protected state in a dedicated self-v1 directory.
 - `trendgpt.rules`: descriptive summaries of mature revenue observations. It never changes production rules.
 - `trendgpt.cli`: offline validation and evaluation entry points.
+- `trendgpt.browser_registry`: validation of intended CDP port-to-role assignments.
+- `trendgpt.chatgpt_coordination`: cross-process `flock` lease; protects only callers that use the same lock path.
+- `trendgpt.chatgpt_queue`: durable queue with idempotency, single-running-task state, leases, and conservative recovery.
+- `trendgpt.chatgpt_queue_cli`: queue management and serialized worker entry point.
 
 Provider integrations, browser automation, domain checks, Feishu valid-report writing, and website dispatch are not enabled by this foundation. They must be added behind explicit interfaces after credentials, costs, and permissions are verified in the target environment.
+
+## Browser and ChatGPT coordination
+
+Ports 9226 and 9227 are planned roles only, not configured instances. Source collection and ChatGPT cleaning are separate. All ChatGPT callers that may share an account should use the same absolute lock file and hold it for the complete browser interaction. The existing `code_before` scripts are not automatically protected until explicitly wired to that lock. A queue worker must validate its output before completing a task; uncertain submissions go to review, not automatic retry.
 
 ## Decision order
 
