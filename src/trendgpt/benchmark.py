@@ -1,11 +1,14 @@
 """API benchmark comparison; benchmark records never enter self-discovery data."""
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from .normalize import resolve_exact
+from .storage import sha256_file
 
 
 def _parse_time(value: str) -> datetime:
@@ -22,7 +25,7 @@ def adjudicate_independence(
     evidence_ref: dict[str, Any],
     adjudicated_by: str,
 ) -> dict[str, Any]:
-    """Mark relative observation independence only with an explicit timestamp and evidence.
+    """Mark relative observation independence only with a real, hash-verified evidence file.
 
     This does not prove provider generation time when the API omits it. The recorded
     conclusion is deliberately limited to 'self observed before local API observation'.
@@ -30,8 +33,15 @@ def adjudicate_independence(
     api_seen = _parse_time(first_api_observed_at)
     ref_path = evidence_ref.get("path") if isinstance(evidence_ref, dict) else None
     ref_hash = evidence_ref.get("sha256") if isinstance(evidence_ref, dict) else None
-    if not isinstance(ref_path, str) or not ref_path.startswith("/") or not isinstance(ref_hash, str) or len(ref_hash) != 64:
-        raise ValueError("an absolute evidence path and SHA-256 digest are required")
+    if not isinstance(ref_path, str) or not Path(ref_path).is_absolute():
+        raise ValueError("evidence path must be absolute")
+    if not isinstance(ref_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", ref_hash):
+        raise ValueError("evidence sha256 must be a lowercase SHA-256 digest")
+    evidence_path = Path(ref_path)
+    if evidence_path.is_symlink() or not evidence_path.is_file():
+        raise ValueError("evidence file must exist and must not be a symlink")
+    if sha256_file(evidence_path) != ref_hash:
+        raise ValueError("evidence file SHA-256 does not match the supplied reference")
     if not isinstance(adjudicated_by, str) or not adjudicated_by.strip():
         raise ValueError("adjudicated_by is required")
     result = deepcopy(candidate)
