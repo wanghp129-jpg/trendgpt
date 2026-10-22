@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Protocol
-
+from typing import Any
 
 SOURCE_STATUSES = {"complete", "partial", "failed", "blocked"}
-DISCOVERY_ORIGINS = {"self_discovered", "external_supplement"}
 
 
 @dataclass(frozen=True)
@@ -35,7 +33,7 @@ class SourceResult:
     errors: list[dict[str, Any]] = field(default_factory=list)
 
     def validate(self) -> "SourceResult":
-        if not self.source_id.strip():
+        if not isinstance(self.source_id, str) or not self.source_id.strip():
             raise ValueError("source_id is required")
         if self.status not in SOURCE_STATUSES:
             raise ValueError(f"invalid source status: {self.status}")
@@ -54,12 +52,13 @@ class SourceResult:
         return asdict(self)
 
 
-class SourceAdapter(Protocol):
+class SourceAdapter:
+    """Structural base class; implementations must make bounded, explicit reads."""
+
     source_id: str
 
     def fetch(self, request: SourceRequest) -> SourceResult:
-        """Fetch one bounded page and preserve original source records."""
-        ...
+        raise NotImplementedError
 
 
 def merge_source_results(
@@ -78,35 +77,35 @@ def merge_source_results(
 ) -> dict[str, Any]:
     """Build a candidate snapshot without injecting API/manual candidates.
 
-    Stable IDs are deduplicated only within a source/platform identity. Same-name
-    records across platforms remain separate until an explicit entity mapping exists.
+    Stable platform IDs are deduplicated. Same-name records across platforms remain
+    separate until an explicit entity mapping exists. Unresolved video titles are
+    preserved as unparsed records, not mislabelled as game names.
     """
     from hashlib import sha256
     from .normalize import normalize_name
 
     normalized_results = [result.validate() for result in source_results]
-    source_runs, candidates, seen = [], [], {}
+    source_runs, candidates, seen, unparsed_items = [], [], {}, []
     raw_records = parsed_records = unparsed_records = 0
 
     for result in normalized_results:
         source_runs.append({
-            "source_id": result.source_id,
-            "status": result.status,
-            "scope": result.scope,
-            "fetched_at": result.fetched_at,
-            "cursor": result.cursor,
-            "next_cursor": result.next_cursor,
-            "coverage": result.coverage,
-            "errors": result.errors,
-            "raw_evidence_refs": result.evidence_refs,
+            "source_id": result.source_id, "status": result.status, "scope": result.scope,
+            "fetched_at": result.fetched_at, "cursor": result.cursor, "next_cursor": result.next_cursor,
+            "coverage": result.coverage, "errors": result.errors, "raw_evidence_refs": result.evidence_refs,
         })
         for position, raw in enumerate(result.items):
             raw_records += 1
-            title = raw.get("title") or raw.get("name") or raw.get("keyword")
+            title = raw.get("candidate_name") or raw.get("name") or raw.get("keyword")
             source_record_id = raw.get("source_record_id") or raw.get("platform_id") or raw.get("id")
             platform = raw.get("platform") or result.source_id
             if not isinstance(title, str) or not title.strip():
                 unparsed_records += 1
+                unparsed_items.append({
+                    "source_id": result.source_id, "position": position,
+                    "reason": "source record has no resolved game identity",
+                    "raw_record": raw, "fetched_at": result.fetched_at,
+                })
                 continue
             parsed_records += 1
             identity = f"{platform}:{source_record_id}" if source_record_id is not None else f"{result.source_id}:{normalize_name(title)}:{position}"
@@ -117,9 +116,7 @@ def merge_source_results(
                 candidate["sources"].append({
                     "source_id": result.source_id,
                     "source_record_id": str(source_record_id) if source_record_id is not None else None,
-                    "position": position,
-                    "fetched_at": result.fetched_at,
-                    "url": raw.get("url"),
+                    "position": position, "fetched_at": result.fetched_at, "url": raw.get("url"),
                 })
                 continue
             candidate = {
@@ -133,22 +130,19 @@ def merge_source_results(
                 "platform_ids": {str(platform): str(source_record_id)} if source_record_id is not None else {},
                 "discovery_origin": "self_discovered",
                 "origin_events": [{
-                    "origin": "self_discovered",
-                    "source_id": result.source_id,
-                    "observed_at": result.fetched_at,
-                    "run_id": run_id,
+                    "origin": "self_discovered", "source_id": result.source_id,
+                    "observed_at": result.fetched_at, "run_id": run_id,
                 }],
                 "first_discovered_at": result.fetched_at,
                 "first_self_discovered_at": result.fetched_at,
-                "independent_eligibility": {"eligible": True, "reason": "source-observed-before-benchmark-exposure"},
+                "independent_eligibility": {
+                    "eligible": None, "reason": "API exposure chronology has not been adjudicated",
+                },
                 "sources": [{
                     "source_id": result.source_id,
                     "source_record_id": str(source_record_id) if source_record_id is not None else None,
-                    "position": position,
-                    "fetched_at": result.fetched_at,
-                    "url": raw.get("url"),
-                    "list_type": raw.get("list_type"),
-                    "published_at": raw.get("published_at"),
+                    "position": position, "fetched_at": result.fetched_at, "url": raw.get("url"),
+                    "list_type": raw.get("list_type"), "published_at": raw.get("published_at"),
                 }],
                 "platform_signals": raw.get("signals", []) if isinstance(raw.get("signals", []), list) else [],
                 "discovery_reasons": [str(raw.get("discovery_reason") or f"observed in {result.source_id}")],
@@ -168,24 +162,14 @@ def merge_source_results(
 
     return {
         "schema": "self-candidate-keywords-v1",
-        "run_id": run_id,
-        "date": run_date,
-        "slot": slot,
-        "timezone": timezone,
-        "started_at": started_at,
-        "collected_at": collected_at,
-        "cutoff_at": cutoff_at,
-        "code_version": code_version,
-        "normalization_version": normalization_version,
+        "run_id": run_id, "date": run_date, "slot": slot, "timezone": timezone,
+        "started_at": started_at, "collected_at": collected_at, "cutoff_at": cutoff_at,
+        "code_version": code_version, "normalization_version": normalization_version,
         "source_policy_version": source_policy_version,
-        "collection_status": collection_status,
-        "completeness": completeness,
-        "source_runs": source_runs,
-        "candidates": candidates,
+        "collection_status": collection_status, "completeness": completeness,
+        "source_runs": source_runs, "candidates": candidates, "unparsed_items": unparsed_items,
         "counts": {
-            "raw_records": raw_records,
-            "parsed_records": parsed_records,
-            "unparsed_records": unparsed_records,
-            "entities": len(candidates),
+            "raw_records": raw_records, "parsed_records": parsed_records,
+            "unparsed_records": unparsed_records, "entities": len(candidates),
         },
     }
