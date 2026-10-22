@@ -1,6 +1,7 @@
 """Conservative, read-only rule evaluation from mature observations."""
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from statistics import median
 from typing import Any
@@ -13,11 +14,14 @@ def evaluate_feature_groups(
     revenue_field: str = "revenue",
     minimum_samples: int = 5,
 ) -> dict[str, Any]:
-    """Describe mature-group revenue differences; never publish or mutate production rules."""
+    """Describe mature-group revenue differences within matching currency/window."""
     if minimum_samples < 2:
         raise ValueError("minimum_samples must be at least 2")
     groups: dict[str, list[float]] = defaultdict(list)
-    excluded = {"immature": 0, "missing_revenue": 0, "invalid_revenue": 0}
+    excluded = {
+        "immature": 0, "missing_revenue": 0, "invalid_revenue": 0,
+        "missing_currency_or_window": 0,
+    }
     eligible_count = 0
     for item in observations:
         if item.get("maturity") != "eligible":
@@ -26,8 +30,12 @@ def evaluate_feature_groups(
         if item.get("revenue_status") != "complete":
             excluded["missing_revenue"] += 1
             continue
+        currency, window_id = item.get("currency"), item.get("window_id")
+        if not isinstance(currency, str) or not currency.strip() or not isinstance(window_id, str) or not window_id.strip():
+            excluded["missing_currency_or_window"] += 1
+            continue
         revenue = item.get(revenue_field)
-        if isinstance(revenue, bool) or not isinstance(revenue, (int, float)) or revenue < 0:
+        if isinstance(revenue, bool) or not isinstance(revenue, (int, float)) or not math.isfinite(revenue) or revenue < 0:
             excluded["invalid_revenue"] += 1
             continue
         features = item.get(feature_field)
@@ -37,7 +45,8 @@ def evaluate_feature_groups(
         eligible_count += 1
         for key, value in features.items():
             if isinstance(value, (str, int, float, bool)) and value is not None:
-                groups[f"{key}={value}"].append(float(revenue))
+                label = f"currency={currency}|window={window_id}|{key}={value}"
+                groups[label].append(float(revenue))
 
     summary = []
     for label, values in sorted(groups.items()):
@@ -56,7 +65,7 @@ def evaluate_feature_groups(
         "production_rules_changed": False,
         "limitations": [
             "observational association is not causal evidence",
-            "revenue comparisons require consistent currency and equivalent complete date windows",
+            "comparisons are partitioned by explicit currency and equivalent window_id",
             "this module does not replay rules, approve releases, or modify production configuration",
         ],
     }
