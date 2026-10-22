@@ -11,7 +11,7 @@ def normalize_name(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("candidate name must be a string")
     value = unicodedata.normalize("NFKC", value).casefold()
-    return re.sub(r"\\s+", " ", value).strip()
+    return re.sub(r"\s+", " ", value).strip()
 
 
 def candidate_keys(name: str, aliases: Iterable[str] = ()) -> set[str]:
