@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .benchmark import compare_snapshots
 from .benchmark_snapshot import read_archived_api_snapshot
 from .contracts import ContractError, validate_file, load_json
+from .rule_replay import replay_rules
 from .rules import evaluate_feature_groups
 from .sources import SourceRequest, merge_source_results
 from .storage import StorageError, atomic_write_json
@@ -65,6 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = sub.add_parser("evaluate-rules", help="summarize mature revenue by feature group; never changes rules")
     evaluate.add_argument("--input", required=True, help="JSON array of observation records")
     evaluate.add_argument("--minimum-samples", type=int, default=5)
+
+    replay = sub.add_parser("replay-rules", help="compare two rule versions on frozen candidates without publishing")
+    replay.add_argument("--candidates", required=True, help="JSON array of candidate objects")
+    replay.add_argument("--baseline-rules", required=True)
+    replay.add_argument("--proposed-rules", required=True)
+    replay.add_argument("--outcomes", required=True, help="JSON array of candidate outcome records")
     return parser
 
 
@@ -227,6 +234,17 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(observations, list):
                 raise ContractError("evaluation input must be a JSON array")
             _print(evaluate_feature_groups(observations, minimum_samples=args.minimum_samples))
+            return 0
+        if args.command == "replay-rules":
+            candidates = load_json(args.candidates)
+            baseline = load_json(args.baseline_rules)
+            proposed = load_json(args.proposed_rules)
+            outcomes = load_json(args.outcomes)
+            if not isinstance(candidates, list) or not isinstance(outcomes, list):
+                raise ContractError("candidates and outcomes must be JSON arrays")
+            if not isinstance(baseline, dict) or not isinstance(proposed, dict):
+                raise ContractError("baseline and proposed rules must be JSON objects")
+            _print(replay_rules(candidates, baseline, proposed, outcomes))
             return 0
         raise AssertionError("unreachable command")
     except (ContractError, StorageError, ValueError, OSError) as exc:
