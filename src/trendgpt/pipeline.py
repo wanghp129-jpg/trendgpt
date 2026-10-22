@@ -27,8 +27,10 @@ def gate_site(site_status: str) -> dict[str, Any]:
 def gate_kd(status: str, value: float | None) -> dict[str, Any]:
     if status != "success" or value is None:
         return {"status": "needs_review", "next": None, "reason": "KD unavailable; do not treat missing data as high KD"}
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 100:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return {"status": "needs_review", "next": None, "reason": "KD value is invalid"}
+    if not 0 <= value <= 100:
+        return {"status": "needs_review", "next": None, "reason": "KD value is outside 0..100"}
     if value >= 30:
         return {"status": "drop", "next": None, "reason": "KD must be strictly below 30"}
     return {"status": "continue", "next": "dataforseo_prefilter"}
