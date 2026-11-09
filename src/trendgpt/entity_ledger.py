@@ -21,7 +21,7 @@ from .storage import StorageError, atomic_write_json, reject_symlink_components
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 
 
-class EntityLedgerConflict(RuntimeError):
+class EntityLedgerConflict(StorageError):
     pass
 
 
@@ -153,6 +153,8 @@ class EntityFirstSeenLedger:
 
     def record_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:
         validate_candidate_snapshot(snapshot)
+        if any(candidate.get("discovery_origin") != "self_discovered" for candidate in snapshot["candidates"]):
+            raise ContractError("first-seen ledger accepts self_discovered candidates only")
         run_id = snapshot["run_id"]
         run_date = snapshot["date"]
         if not RUN_ID_RE.fullmatch(run_id):
@@ -175,6 +177,10 @@ class EntityFirstSeenLedger:
                 marker = existing.get("first_seen_ledger") if isinstance(existing, dict) else None
                 if not isinstance(marker, dict) or marker.get("input_sha256") != input_sha256:
                     raise EntityLedgerConflict(f"first-seen output does not match recorded run: {output_path}")
+                content_copy = copy.deepcopy(existing)
+                content_copy.pop("first_seen_ledger", None)
+                if marker.get("content_sha256") != _snapshot_digest(content_copy):
+                    raise EntityLedgerConflict(f"first-seen output content hash is invalid: {output_path}")
                 return {
                     "status": "reused",
                     "run_id": run_id,
@@ -187,7 +193,11 @@ class EntityFirstSeenLedger:
                 }
             if previous_run:
                 missing_entities = [key for key in previous_run.get("entity_keys", []) if key not in ledger["entities"]]
-                if missing_entities:
+                recorded_reviews = {
+                    item.get("review_id") for item in ledger["review_queue"] if isinstance(item, dict)
+                }
+                missing_reviews = [key for key in previous_run.get("review_ids", []) if key not in recorded_reviews]
+                if missing_entities or missing_reviews:
                     raise EntityLedgerConflict("entity ledger is missing records referenced by an earlier run")
 
             enriched = copy.deepcopy(snapshot)
@@ -251,7 +261,9 @@ class EntityFirstSeenLedger:
                     ledger["entities"][entity_key] = record
 
                 previous_name = record.get("canonical_name")
+                aliases_before = set(record.get("aliases", []))
                 if isinstance(previous_name, str) and previous_name.strip() and previous_name != candidate["canonical_name"]:
+                    aliases_before.add(previous_name)
                     if previous_name not in record["aliases"]:
                         record["aliases"].append(previous_name)
                 for alias in candidate.get("aliases", []):
@@ -287,7 +299,7 @@ class EntityFirstSeenLedger:
                     "method": "cross_run_platform_id_ledger",
                     "confidence": 1.0,
                 }
-                candidate["aliases"] = sorted(set(candidate.get("aliases", [])) | set(record["aliases"]))
+                candidate["aliases"] = sorted(set(candidate.get("aliases", [])) | aliases_before)
                 run_entity_keys.append(entity_key)
                 confirmed_count += 1
 
@@ -311,9 +323,11 @@ class EntityFirstSeenLedger:
                 if sorted(set(run_entity_keys)) != expected_entities or sorted(set(run_review_ids)) != expected_reviews:
                     raise EntityLedgerConflict(f"run_id {run_id!r} was previously recorded with different entity resolution")
 
+            content_sha256 = _snapshot_digest(enriched)
             enriched["first_seen_ledger"] = {
                 "schema": "self-entity-first-seen-ledger-v1",
                 "input_sha256": input_sha256,
+                "content_sha256": content_sha256,
                 "ledger_revision": previous_run.get("ledger_revision", ledger["revision"]) if previous_run else ledger["revision"],
                 "run_id": run_id,
             }

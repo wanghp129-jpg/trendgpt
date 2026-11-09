@@ -16,6 +16,7 @@ def candidate_snapshot(
     name: str = "Game A",
     platform_ids: dict | None = None,
     aliases: list[str] | None = None,
+    origin: str = "self_discovered",
 ):
     candidate = {
         "candidate_id": f"candidate-{run_id}",
@@ -25,7 +26,7 @@ def candidate_snapshot(
         "raw_titles": [name],
         "platforms": ["steam"] if platform_ids else [],
         "platform_ids": platform_ids or {},
-        "discovery_origin": "self_discovered",
+        "discovery_origin": origin,
         "origin_events": [{
             "origin": "self_discovered", "source_id": "steam",
             "observed_at": observed_at, "run_id": run_id,
@@ -166,6 +167,17 @@ class EntityFirstSeenLedgerTests(unittest.TestCase):
             ledger.record_snapshot(first)
             with self.assertRaises(EntityLedgerConflict):
                 ledger.record_snapshot(second)
+
+    def test_api_benchmark_candidates_cannot_enter_self_first_seen_ledger(self):
+        with tempfile.TemporaryDirectory() as temp:
+            ledger = EntityFirstSeenLedger(Path(temp) / "self-v1")
+            snapshot = candidate_snapshot(
+                "run-api", "2026-11-09", "2026-11-09T00:02:00+08:00",
+                platform_ids={"steam": "123"}, origin="api_benchmark",
+            )
+            with self.assertRaises(Exception):
+                ledger.record_snapshot(snapshot)
+            self.assertFalse(ledger.ledger_path.exists())
 
     def test_refuses_non_self_v1_root(self):
         with tempfile.TemporaryDirectory() as temp:
