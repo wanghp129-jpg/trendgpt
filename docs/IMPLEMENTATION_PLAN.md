@@ -40,6 +40,23 @@ The command is local-only and does not invoke fetch-daily.py:
 
 A successful local morning read is not proof that the provider's returned set is complete or that the provider explicitly identifies the 00:00 batch. The current API payload exposes date and window, but no batch ID, generated/updated timestamp, pagination total, or full-set assertion. The reader therefore records the owner-declared schedule and leaves benchmark evaluation disabled. benchmark_not_ready is an expected safe result, not a script failure.
 
+## Stage 1.2 — cross-day first-seen entity ledger
+
+- [x] Add a persistent entity ledger under the explicit self-v1 root, separate from daily run state and API production memory.
+- [x] Use stable platform IDs as the only automatic cross-run identity key.
+- [x] Preserve first/last observed timestamps, source IDs, evidence references and idempotent run observations.
+- [x] Keep same-title/different-platform-ID records separate; no fuzzy or title-only merge.
+- [x] Route missing IDs, multiple platform IDs and missing timestamps into a persistent review queue.
+- [x] Enrich a copy of each candidate snapshot with stable entity IDs and ledger-backed first_self_discovered_at; never modify the original input snapshot.
+- [x] Add a CLI command and offline tests for first-seen persistence, cross-day continuity, idempotency and ambiguity.
+- [ ] Run the ledger on real Self snapshots after the first approved VPS source collection; verify platform IDs and source timestamps before using the values in benchmark comparisons.
+
+Command:
+
+    trendgpt record-first-seen --input candidate_keywords.json --output-root /approved/path/self-v1
+
+The ledger does not infer cross-platform equivalence. A record with zero or multiple platform ID pairs remains needs_review. First-seen time is the source-observed timestamp carried by the candidate, not the TrendOracle mining time or API publication time.
+
 ## Stage 1.5 — browser roles and ChatGPT coordination
 
 - [x] Define the browser port registry with 9226/9227 explicitly marked planned, not configured.

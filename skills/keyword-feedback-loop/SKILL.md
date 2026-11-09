@@ -10,6 +10,7 @@ description: Compare immutable self-discovery snapshots with an optional archive
 - Read the existing local TrendOracle morning archive with trendgpt snapshot-api-ingest --ingest-root ABS --date YYYY-MM-DD --output-root ABS/self-v1. This command only reads tmp/fetch-*/summary.json, each run's response.json, and the matching immutable morning raw file. It never calls the API or fetch-daily.py.
 - For one explicitly selected raw file, use trendgpt snapshot-api --input RAW --acquired-at RFC3339 --output-root ABS/self-v1.
 - Compare the resulting benchmark with self candidate snapshots using trendgpt compare.
+- Use the persistent first-seen entity ledger to carry stable platform-ID discovery timestamps across daily Self snapshots. Name-only and cross-platform ambiguous records remain review items; do not treat them as confirmed matches.
 - The business schedule is 00:00 Asia/Shanghai mining and around 08:00 publication. The local morning ingest run start is not the provider mining timestamp.
 - The current API payload does not prove server generation time, update time, batch ID, or complete-set semantics. The reader records the operator-declared schedule as operator_declared_unverified and keeps the snapshot at benchmark_not_ready, with null coverage.
 - API records are reference-only. Never inject them into candidate_keywords.json or count API/manual additions as independent self discoveries.

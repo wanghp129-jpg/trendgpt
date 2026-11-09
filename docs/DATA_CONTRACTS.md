@@ -19,6 +19,14 @@ A candidate records candidate_id, entity_id, canonical_name, aliases, raw_titles
 
 Use stable platform identifiers when present. Similar names alone do not prove the same game; ambiguous cross-platform matches remain separate until reviewed.
 
+## First-seen entity ledger
+
+The persistent ledger uses schema=self-entity-first-seen-ledger-v1 and lives only under the explicit self-v1 root. It records stable platform entity keys, first_seen_at, last_seen_at, first/last run IDs, observation_count, observed_run_ids, source IDs, aliases and hash-bound evidence references.
+
+Automatic identity requires exactly one stable platform/id pair. Multiple platform IDs require an explicit cross-platform mapping; missing IDs or timestamps are review items. Exact names alone are not sufficient to merge records across runs. Replaying the same run ID and input hash is idempotent; reusing a run ID with different input must fail.
+
+The ledger enriches a separate copy of the candidate snapshot. It does not rewrite the raw candidate snapshot or any TrendOracle/API artifact.
+
 ## Verified snapshot
 
 Each result records the candidate identity, KD evidence, DataForSEO prefilter evidence, final Google Trends status and screenshot, domain availability, final_decision and reasons. A build decision requires identity resolution, real KD below 30, final browser trend approval and at least one currently available domain. It is still not dispatch authorization.

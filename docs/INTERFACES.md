@@ -10,6 +10,7 @@ This file distinguishes implemented offline logic from unverified server integra
 | Site registry read | Read-only site.json schema check and direct-name lookup exist | Never mutates site.json; keyword-only collisions are review items, not hard duplicates; live in-flight task reconciliation remains pending. |
 | Source fetch | Steam, Roblox and YouTube RSS adapters implemented but live access unverified | One bounded page/feed per call, source IDs, pagination hints, partial status, raw evidence and errors. |
 | Candidate normalization | Exact name normalization and source-record merge exist | Stable IDs preferred; ambiguous cross-platform matches preserved; unresolved video titles stay unparsed; independence eligibility is not assumed. |
+| First-seen entity ledger | Implemented offline; real source ID/timestamp semantics pending VPS validation | trendgpt record-first-seen --input CANDIDATE_JSON --output-root ABS/self-v1. Persists first/last observed times only for one stable platform ID; title-only, missing-ID and multi-platform records enter review. It does not fuzzy-merge entities. |
 | KD query | Not implemented | Real Similarweb difficulty plus matching query/market and screenshot evidence. |
 | Trend prefilter | Not implemented; dependency unverified | DataForSEO task intent, task ID, aligned series and explicit cost controls. |
 | Google Trends verification | Not implemented | Candidate and GPTs comparison from the same request, final curve data and same-time screenshot. |

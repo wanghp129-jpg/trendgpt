@@ -21,7 +21,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Browser instance registry for existing ports and planned 9226/9227 roles.
 - Cross-process ChatGPT flock lease wrapper and persistent self-v1 queue with idempotency, single-task claims, SHA-256 output checks, and uncertain-run review.
 - Pure Lesson 14 decision gates and a provider-injected validation orchestrator. Missing data goes to review rather than silent rejection.
-- Read-only site registry matching, isolated lock-protected self-v1 run state and deterministic rule replay.
+- Read-only site registry matching, isolated lock-protected self-v1 run state, stable-platform-ID first-seen ledger and deterministic rule replay.
 - Read-only TrendOracle morning archive reader that reconciles local summary/response/raw evidence, preserves pre-publication attempts and never copies the private identity field.
 - Same-batch API comparison gates; operator-declared but unverified API batch timing keeps benchmark coverage null.
 - Archived API snapshot comparison and a descriptive mature-revenue evaluator that does not change production rules.
@@ -42,6 +42,7 @@ Requires Python 3.11+; runtime package dependencies are standard library only.
     python -m pip install -e .
     bash scripts/port-check.sh
     trendgpt --help
+    trendgpt record-first-seen --help
     trendgpt-adjudicate --help
     trendgpt-dispatch-intent --help
     trendgpt-queue --help

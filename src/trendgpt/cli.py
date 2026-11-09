@@ -14,6 +14,7 @@ from .benchmark import compare_snapshots
 from .benchmark_snapshot import read_archived_api_snapshot
 from .contracts import ContractError, validate_file, load_json
 from .ingest_reader import read_api_ingest_morning_batch
+from .entity_ledger import EntityFirstSeenLedger
 from .rule_replay import replay_rules
 from .rules import evaluate_feature_groups
 from .sources import SourceRequest, merge_source_results
@@ -44,6 +45,10 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_snapshot.add_argument("--ingest-root", required=True, help="local trendoracle-ingest Skill root")
     ingest_snapshot.add_argument("--date", required=True, help="Shanghai business date YYYY-MM-DD")
     ingest_snapshot.add_argument("--output-root", required=True, help="explicit path ending in self-v1")
+
+    first_seen = sub.add_parser("record-first-seen", help="record stable platform-ID first-seen history across self-v1 runs")
+    first_seen.add_argument("--input", required=True, help="candidate_keywords.json from one completed self-discovery run")
+    first_seen.add_argument("--output-root", required=True, help="explicit path ending in self-v1")
 
     fetch = sub.add_parser("fetch-source", help="fetch one bounded page from a configured public source")
     fetch.add_argument("--source", choices=("steam", "roblox", "youtube"), required=True)
@@ -240,6 +245,13 @@ def main(argv: list[str] | None = None) -> int:
                 "attempts": result.get("attempts", []),
                 "network_requests": 0,
             })
+            return 0
+        if args.command == "record-first-seen":
+            snapshot = load_json(args.input)
+            if not isinstance(snapshot, dict):
+                raise ContractError("candidate snapshot must be a JSON object")
+            result = EntityFirstSeenLedger(args.output_root).record_snapshot(snapshot)
+            _print(result)
             return 0
         if args.command == "fetch-source":
             result = _fetch_source(args)
