@@ -321,7 +321,7 @@ def read_api_ingest_morning_batch(
         "completeness": {
             "status": selected["completeness_status"],
             "unparsed_records": selected["unparsed_records"],
-            "invalid_buckets": selected["bucket_issues"],
+            "invalid_or_missing_buckets": selected["bucket_issues"],
             "summary_count_mismatches": selected["count_mismatches"],
             "provider_full_set_assertion": None,
             "reason": (
