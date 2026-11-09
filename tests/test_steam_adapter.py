@@ -140,7 +140,8 @@ class SteamAdapterTests(unittest.TestCase):
         html = _card("12345", "Game A", "Nov 9, 2026")
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "output" / "self-v1"
-            result = SteamSearchAdapter().fetch(_request(root, page_size=2))
+            with patch("trendgpt.adapters.steam.get_public_text", return_value=html):
+                result = SteamSearchAdapter().fetch(_request(root, page_size=2))
         self.assertEqual(result.status, "partial")
         self.assertIsNone(result.next_cursor)
         self.assertIsNone(result.coverage["total_results"])
