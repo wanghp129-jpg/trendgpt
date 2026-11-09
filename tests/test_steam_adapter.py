@@ -129,7 +129,8 @@ class SteamAdapterTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "output" / "self-v1"
-            result = SteamSearchAdapter().fetch(_request(root, cursor="2", page_size=2))
+            with patch("trendgpt.adapters.steam.get_public_text", return_value=html):
+                result = SteamSearchAdapter().fetch(_request(root, cursor="2", page_size=2))
         self.assertEqual(result.status, "complete", msg=f"coverage={result.coverage!r}; errors={result.errors!r}; items={len(result.items)}")
         self.assertIsNone(result.next_cursor)
         self.assertTrue(result.coverage["page_complete"])
