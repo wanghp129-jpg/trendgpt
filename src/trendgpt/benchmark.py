@@ -85,6 +85,15 @@ def _self_eligible(candidate: dict[str, Any], cutoff: datetime) -> bool:
         return False
 
 
+def _not_ready(reason: str) -> dict[str, Any]:
+    return {
+        "status": "benchmark_not_ready", "denominator": None,
+        "matched": None, "missed": None, "ambiguous": None,
+        "independent_coverage": None, "matches": [],
+        "limitations": [reason],
+    }
+
+
 def compare_snapshots(
     benchmark: dict[str, Any],
     self_snapshots: list[dict[str, Any]],
@@ -92,7 +101,7 @@ def compare_snapshots(
     cutoff: str,
     benchmark_enabled: bool = True,
 ) -> dict[str, Any]:
-    """Compare immutable snapshots conservatively; unusable benchmark => null coverage."""
+    """Compare immutable, same-batch snapshots; unproven alignment => null coverage."""
     cutoff_dt = _parse_time(cutoff)
     if not benchmark_enabled:
         return {
@@ -104,6 +113,13 @@ def compare_snapshots(
     completeness = benchmark.get("completeness") or {}
     update = benchmark.get("update_confirmation") or {}
     records = benchmark.get("normalized_records")
+    batch_date = benchmark.get("batch_date")
+    batch_timezone = benchmark.get("timezone")
+    alignment_verified = benchmark.get("batch_alignment_status") == "verified"
+    aligned_snapshots = [
+        snapshot for snapshot in self_snapshots
+        if snapshot.get("date") == batch_date and snapshot.get("timezone") == batch_timezone
+    ]
     ready = (
         benchmark.get("evaluation_status") == "ready"
         and benchmark.get("usable_for_evaluation") is True
@@ -111,17 +127,21 @@ def compare_snapshots(
         and update.get("confirmed") is True
         and isinstance(records, list)
         and len(records) > 0
+        and isinstance(batch_date, str)
+        and bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", batch_date))
+        and isinstance(batch_timezone, str)
+        and bool(batch_timezone)
+        and alignment_verified
+        and bool(aligned_snapshots)
     )
     if not ready:
-        return {
-            "status": "benchmark_not_ready", "denominator": None,
-            "matched": None, "missed": None, "ambiguous": None,
-            "independent_coverage": None, "matches": [],
-            "limitations": ["benchmark freshness, completeness, or update confirmation is insufficient"],
-        }
+        reason = "benchmark freshness, completeness, update confirmation, or batch alignment is insufficient"
+        if alignment_verified and not aligned_snapshots:
+            reason = "no self snapshot matches the benchmark batch_date and timezone"
+        return _not_ready(reason)
 
     candidates: list[dict[str, Any]] = []
-    for snapshot in self_snapshots:
+    for snapshot in aligned_snapshots:
         items = snapshot.get("candidates")
         if not isinstance(items, list):
             continue
@@ -151,6 +171,8 @@ def compare_snapshots(
     denominator = len(records)
     return {
         "status": "ready",
+        "batch_date": batch_date,
+        "timezone": batch_timezone,
         "denominator": denominator,
         "matched": len(matches),
         "missed": len(missed),
@@ -163,5 +185,6 @@ def compare_snapshots(
         "limitations": [
             "exact normalized names and explicit aliases only; fuzzy matches require review",
             "independence is relative to observed API exposure, not provider generation time when that time is unavailable",
+            "only self snapshots with the exact benchmark batch_date and timezone are compared",
         ],
     }

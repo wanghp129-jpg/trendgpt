@@ -16,6 +16,9 @@ def benchmark(status="ready"):
         "schema": "api-benchmark-snapshot-v1",
         "snapshot_id": "snapshot-1",
         "acquired_at": "2026-10-22T08:00:00+08:00",
+        "batch_date": "2026-10-22",
+        "timezone": "Asia/Shanghai",
+        "batch_alignment_status": "verified",
         "evaluation_status": status,
         "usable_for_evaluation": status == "ready",
         "completeness": {"status": "complete" if status == "ready" else "unknown"},
@@ -24,9 +27,11 @@ def benchmark(status="ready"):
     }
 
 
-def self_snapshot(origin="self_discovered", eligible=True):
+def self_snapshot(origin="self_discovered", eligible=True, batch_date="2026-10-22"):
     return {
         "schema": "self-candidate-keywords-v1",
+        "date": batch_date,
+        "timezone": "Asia/Shanghai",
         "candidates": [{
             "candidate_id": "c-1",
             "entity_id": "e-1",
@@ -57,6 +62,12 @@ class ContractTests(unittest.TestCase):
     def test_ready_benchmark_requires_update_confirmation(self):
         data = benchmark()
         data["update_confirmation"]["confirmed"] = False
+        with self.assertRaises(ContractError):
+            validate_benchmark_snapshot(data)
+
+    def test_ready_benchmark_requires_verified_batch_alignment(self):
+        data = benchmark()
+        data["batch_alignment_status"] = "operator_declared_unverified"
         with self.assertRaises(ContractError):
             validate_benchmark_snapshot(data)
 
@@ -97,6 +108,15 @@ class NormalizeAndBenchmarkTests(unittest.TestCase):
         self.assertEqual(result["status"], "benchmark_not_ready")
         self.assertIsNone(result["independent_coverage"])
 
+    def test_operator_declared_alignment_keeps_coverage_null(self):
+        data = benchmark()
+        data["batch_alignment_status"] = "operator_declared_unverified"
+        result = compare_snapshots(
+            data, [self_snapshot()], cutoff="2026-10-22T08:00:00+08:00",
+        )
+        self.assertEqual(result["status"], "benchmark_not_ready")
+        self.assertIsNone(result["independent_coverage"])
+
     def test_api_origin_does_not_count_as_self_discovery(self):
         result = compare_snapshots(
             benchmark(), [self_snapshot(origin="api_benchmark")],
@@ -105,13 +125,22 @@ class NormalizeAndBenchmarkTests(unittest.TestCase):
         self.assertEqual(result["matched"], 0)
         self.assertEqual(result["missed"], 1)
 
-    def test_independent_candidate_counts(self):
+    def test_independent_candidate_counts_only_for_same_batch(self):
         result = compare_snapshots(
             benchmark(), [self_snapshot()],
             cutoff="2026-10-22T08:00:00+08:00",
         )
         self.assertEqual(result["matched"], 1)
         self.assertEqual(result["independent_coverage"], 1.0)
+        self.assertEqual(result["batch_date"], "2026-10-22")
+
+    def test_different_batch_date_returns_null_coverage(self):
+        result = compare_snapshots(
+            benchmark(), [self_snapshot(batch_date="2026-10-21")],
+            cutoff="2026-10-22T08:00:00+08:00",
+        )
+        self.assertEqual(result["status"], "benchmark_not_ready")
+        self.assertIsNone(result["independent_coverage"])
 
 
 class StateTests(unittest.TestCase):

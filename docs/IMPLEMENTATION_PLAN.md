@@ -2,7 +2,7 @@
 
 This repository is a staged, portable implementation. A component is not considered complete merely because its interface or folder exists.
 
-## Stage 1 — foundation (current branch)
+## Stage 1 — foundation
 
 - [x] Python package metadata and CLI skeleton.
 - [x] Strict JSON loader and first-pass validators for candidate, verification, benchmark, run result, and state records.
@@ -11,11 +11,34 @@ This repository is a staged, portable implementation. A component is not conside
 - [x] Self-v1 state store with a dedicated root, file lock, revision check, and same-slot conflict protection.
 - [x] Descriptive revenue grouping that does not mutate rules.
 - [x] Provider-neutral source result contracts and conservative candidate merge.
-- [x] Bounded Steam, Roblox chart and YouTube RSS source adapters; raw source text is preserved under self-v1 evidence.
+- [x] Bounded Steam, Roblox chart and YouTube RSS source adapters; raw source text is preserved under the explicit self-v1 evidence root.
 - [x] Read-only archived API snapshot conversion; provider freshness/completeness remains unknown by default.
-- [x] Run and review the latest full GitHub Actions offline test result (72 tests passed; current branch, 2026-10-22 UTC).
+- [x] Original foundation revision had 72 offline tests passing; every subsequent revision requires fresh CI.
 - [ ] Validate public source parsers against current live pages in an approved environment.
 - [ ] Review contract fields against a real, redacted local snapshot before relying on the schema in production.
+
+## Stage 1.1 — TrendOracle morning archive reader
+
+- [x] Add a read-only reader for the existing trendoracle-ingest tmp/fetch-*/summary.json, response.json, and immutable data/raw/date/morning/hash.json evidence.
+- [x] Select the earliest valid successful/duplicate morning run for a requested Shanghai business date; ignore evening snapshots and do not substitute latest.json or observations.jsonl.
+- [x] Reconcile summary run ID, date/window, response/raw byte equality, and SHA-256 filename/content.
+- [x] Preserve not_open_yet attempts before the first successful morning response.
+- [x] Write the sanitized API reference under the independent self-v1/benchmarks/date/snapshot-id namespace; never copy the raw identity field.
+- [x] Record the operator-declared 00:00 mining / 08:00 publication schedule separately from provider timestamps.
+- [x] Keep source_batch_id, source_updated_at, published_at, collected_at, and ingested_at null when the provider/local summary does not supply them.
+- [x] Force batch_alignment_status=operator_declared_unverified and evaluation_status=benchmark_not_ready; do not report coverage from this artifact.
+- [x] Add same-batch date/timezone gates to the benchmark comparator.
+- [ ] Run the reader on the VPS's real 2026-11-09 archive and inspect its generated manifest before relying on it.
+- [ ] Verify the exact deployed trendoracle-ingest source revision matches the public openclaw-config source used to define this reader.
+
+The command is local-only and does not invoke fetch-daily.py:
+
+    trendgpt snapshot-api-ingest \
+      --ingest-root /root/.openclaw/skills/trendoracle-ingest \
+      --date 2026-11-09 \
+      --output-root /root/.openclaw/skills/keyword-feedback-loop/output/self-v1
+
+A successful local morning read is not proof that the provider's returned set is complete or that the provider explicitly identifies the 00:00 batch. The current API payload exposes date and window, but no batch ID, generated/updated timestamp, pagination total, or full-set assertion. The reader therefore records the owner-declared schedule and leaves benchmark evaluation disabled. benchmark_not_ready is an expected safe result, not a script failure.
 
 ## Stage 1.5 — browser roles and ChatGPT coordination
 
@@ -24,7 +47,7 @@ This repository is a staged, portable implementation. A component is not conside
 - [x] Implement a durable self-v1 ChatGPT queue with idempotency, lease tokens, hash-verified artifacts, and conservative stale-run recovery.
 - [x] Add offline tests for lock exclusion, queue idempotency, lease checks, and safe failure handling.
 - [ ] Configure and verify 9226 and 9227 on the target VPS without altering existing browser instances.
-- [ ] Select the actual shared lock path and integrate it into every `code_before` ChatGPT stage.
+- [ ] Select the actual shared lock path and integrate it into every code_before ChatGPT stage.
 - [ ] Implement the Playwright/CDP ChatGPT cleaner worker and validate its output schema.
 - [ ] Run an end-to-end shadow batch; verify task ownership, screenshot/evidence, output correctness, and no cross-task contamination.
 
@@ -60,8 +83,8 @@ This repository is a staged, portable implementation. A component is not conside
 ## Stage 5 — learning and independent operation
 
 1. Read existing archived API snapshots without triggering the API fetcher.
-2. Establish benchmark freshness/completeness rules; the present provider does not expose a confirmed generated_at/updated_at field.
-3. Compare independent discoveries, missed records and observed relative discovery timing.
+2. Establish benchmark freshness/completeness rules; the present provider does not expose a confirmed generated_at/updated_at field or a complete-set assertion.
+3. Compare independent discoveries, missed records and observed relative discovery timing only after same-date/timezone batch alignment is verified.
 4. Link candidates to website task IDs and domains using a separate mapping table.
 5. Read approved, date-aligned GSC, GA and Adsterra observations; exclude immature and incomplete windows.
 6. Replay candidate rules on frozen history, then run shadow rules.

@@ -12,6 +12,7 @@ ORIGINS = {"self_discovered", "api_benchmark", "manual", "external_supplement"}
 RUN_STATUSES = {"running", "completed", "partial", "failed", "needs_review"}
 DECISIONS = {"build", "drop", "needs_review"}
 BENCHMARK_STATUSES = {"ready", "benchmark_not_ready", "disabled"}
+BATCH_ALIGNMENT_STATUSES = {"verified", "operator_declared_unverified", "unverified", "mismatch"}
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -161,6 +162,12 @@ def validate_benchmark_snapshot(value: Any) -> dict[str, Any]:
     _timestamp(obj.get("acquired_at"), "acquired_at")
     if obj.get("evaluation_status") not in BENCHMARK_STATUSES:
         raise ContractError("evaluation_status is invalid")
+    if "batch_date" in obj:
+        _date(obj.get("batch_date"), "batch_date")
+    if "timezone" in obj:
+        _str(obj.get("timezone"), "timezone")
+    if "batch_alignment_status" in obj and obj.get("batch_alignment_status") not in BATCH_ALIGNMENT_STATUSES:
+        raise ContractError("batch_alignment_status is invalid")
     completeness = _obj(obj.get("completeness"), "completeness")
     update = _obj(obj.get("update_confirmation"), "update_confirmation")
     records = _arr(obj.get("normalized_records"), "normalized_records")
@@ -169,6 +176,10 @@ def validate_benchmark_snapshot(value: Any) -> dict[str, Any]:
             raise ContractError("ready benchmark requires complete data, confirmed update, and non-empty records")
         if obj.get("usable_for_evaluation") is not True:
             raise ContractError("ready benchmark must be marked usable_for_evaluation")
+        _date(obj.get("batch_date"), "batch_date")
+        _str(obj.get("timezone"), "timezone")
+        if obj.get("batch_alignment_status") != "verified":
+            raise ContractError("ready benchmark requires verified API batch alignment")
     if obj.get("usable_for_evaluation") is True and obj.get("evaluation_status") != "ready":
         raise ContractError("only a ready benchmark can be usable_for_evaluation")
     return obj

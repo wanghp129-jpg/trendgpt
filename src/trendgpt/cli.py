@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .benchmark import compare_snapshots
 from .benchmark_snapshot import read_archived_api_snapshot
 from .contracts import ContractError, validate_file, load_json
+from .ingest_reader import read_api_ingest_morning_batch
 from .rule_replay import replay_rules
 from .rules import evaluate_feature_groups
 from .sources import SourceRequest, merge_source_results
@@ -35,6 +36,14 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--input", required=True, help="path to an already archived raw JSON file")
     snapshot.add_argument("--output-root", required=True, help="explicit path ending in self-v1")
     snapshot.add_argument("--acquired-at", required=True, help="RFC3339 timestamp with timezone")
+
+    ingest_snapshot = sub.add_parser(
+        "snapshot-api-ingest",
+        help="read the earliest successful local TrendOracle morning ingest for a Shanghai date; no network access",
+    )
+    ingest_snapshot.add_argument("--ingest-root", required=True, help="local trendoracle-ingest Skill root")
+    ingest_snapshot.add_argument("--date", required=True, help="Shanghai business date YYYY-MM-DD")
+    ingest_snapshot.add_argument("--output-root", required=True, help="explicit path ending in self-v1")
 
     fetch = sub.add_parser("fetch-source", help="fetch one bounded page from a configured public source")
     fetch.add_argument("--source", choices=("steam", "roblox", "youtube"), required=True)
@@ -209,6 +218,26 @@ def main(argv: list[str] | None = None) -> int:
             _print({
                 "status": result["evaluation_status"], "snapshot_id": result["snapshot_id"],
                 "record_count": len(result["normalized_records"]), "output_path": result["output_path"],
+                "network_requests": 0,
+            })
+            return 0
+        if args.command == "snapshot-api-ingest":
+            result = read_api_ingest_morning_batch(
+                args.ingest_root, batch_date=args.date, output_root=args.output_root,
+            )
+            snapshot_path = result.get("output_path")
+            _print({
+                "status": result["evaluation_status"] if "evaluation_status" in result else result["status"],
+                "batch_date": args.date,
+                "selected_run_id": result.get("local_fetch_run_id"),
+                "snapshot_id": result.get("snapshot_id"),
+                "record_count": len(result.get("normalized_records", [])),
+                "completeness": result.get("completeness"),
+                "batch_alignment_status": result.get("batch_alignment_status"),
+                "snapshot_path": snapshot_path,
+                "manifest_path": result.get("manifest_path"),
+                "read_report_path": result.get("read_report_path"),
+                "attempts": result.get("attempts", []),
                 "network_requests": 0,
             })
             return 0

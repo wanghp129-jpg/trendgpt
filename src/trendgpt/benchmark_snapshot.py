@@ -1,8 +1,6 @@
 """Read an already archived TrendOracle raw snapshot without calling the API.
 
-The current provider payload has no authoritative generated_at/updated_at marker and
-does not prove complete-set semantics. This reader therefore emits a not-ready
-benchmark unless a later, separately reviewed policy adds trustworthy confirmation.
+Provider timing and complete-set semantics are not inferred from local fetch time.
 """
 from __future__ import annotations
 
@@ -11,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import ContractError, load_json
-from .storage import atomic_write_json, evidence_ref
+from .storage import StorageError, atomic_write_json, evidence_ref
 
 
 def read_archived_api_snapshot(
@@ -19,6 +17,9 @@ def read_archived_api_snapshot(
     *,
     acquired_at: str,
     output_root: str | Path,
+    snapshot_metadata: dict[str, Any] | None = None,
+    relative_output_dir: str | Path | None = None,
+    immutable: bool = False,
 ) -> dict[str, Any]:
     root = Path(output_root).absolute()
     if root.name != "self-v1":
@@ -27,8 +28,6 @@ def read_archived_api_snapshot(
     raw = load_json(raw_path)
     if not isinstance(raw, dict):
         raise ContractError("API raw snapshot must be an object")
-    if not isinstance(raw.get("words"), list) or not isinstance(raw.get("bonus_words"), list):
-        raise ContractError("API raw snapshot must contain words and bonus_words arrays")
     try:
         parsed_time = datetime.fromisoformat(acquired_at.replace("Z", "+00:00"))
     except (AttributeError, ValueError) as exc:
@@ -38,8 +37,13 @@ def read_archived_api_snapshot(
 
     normalized = []
     unparsed = 0
+    bucket_issues: list[str] = []
     for bucket in ("words", "bonus_words"):
-        for position, item in enumerate(raw[bucket]):
+        items = raw.get(bucket)
+        if not isinstance(items, list):
+            bucket_issues.append(bucket)
+            continue
+        for position, item in enumerate(items):
             if isinstance(item, str) and item.strip():
                 keyword, extra = item.strip(), {}
             elif isinstance(item, dict) and isinstance(item.get("keyword"), str) and item["keyword"].strip():
@@ -49,16 +53,16 @@ def read_archived_api_snapshot(
                 unparsed += 1
                 continue
             record = {"keyword": keyword, "source_bucket": bucket, "source_position": position}
-            if "platform" in extra:
-                record["platform"] = extra["platform"]
+            if "platform" in extra and extra["platform"].strip():
+                record["platform"] = extra["platform"].strip()
             normalized.append(record)
 
-    # Never copy the raw identity field or the whole provider response to this artifact.
     raw_ref = evidence_ref(raw_path, root=raw_path.parent)
     snapshot = {
         "schema": "api-benchmark-snapshot-v1",
         "snapshot_id": raw_ref["sha256"][:24],
         "acquired_at": acquired_at,
+        "acquired_at_semantics": "local fetch-run start; not provider mining or publication time",
         "source": "trendoracle",
         "provider_date": raw.get("date"),
         "provider_window": raw.get("window"),
@@ -68,16 +72,24 @@ def read_archived_api_snapshot(
         "raw_response_ref": raw_ref,
         "normalized_records": normalized,
         "completeness": {
-            "status": "unknown", "unparsed_records": unparsed,
+            "status": "partial" if bucket_issues or unparsed else "unknown",
+            "unparsed_records": unparsed,
+            "invalid_or_missing_buckets": bucket_issues,
             "provider_full_set_assertion": None,
-            "reason": "the archived payload does not prove that the provider returned a complete benchmark set",
+            "reason": (
+                "one or more word buckets are missing/invalid or contain unparseable records"
+                if bucket_issues or unparsed
+                else "the archived payload does not prove that the provider returned a complete benchmark set"
+            ),
         },
         "freshness": {
             "status": "unknown",
             "reason": "local acquisition time is not provider generation/update time",
         },
         "update_confirmation": {
-            "confirmed": False, "method": "unknown", "evidence_refs": [],
+            "confirmed": False,
+            "method": "unknown",
+            "evidence_refs": [],
             "reason": "provider generated_at/updated_at is absent; operator confirmation is required",
         },
         "evaluation_status": "benchmark_not_ready",
@@ -89,7 +101,35 @@ def read_archived_api_snapshot(
             "keyword records are a reference set only and must never be injected into self-discovery candidates",
         ],
     }
-    output_path = root / "benchmarks" / snapshot["snapshot_id"] / "api_benchmark_snapshot.json"
-    atomic_write_json(output_path, snapshot, root=root)
+
+    if snapshot_metadata is not None:
+        if not isinstance(snapshot_metadata, dict):
+            raise ContractError("snapshot_metadata must be an object")
+        reserved = {
+            "schema", "snapshot_id", "acquired_at", "source", "provider_date",
+            "provider_window", "provider_generated_at", "provider_updated_at",
+            "provider_timezone", "raw_response_ref", "normalized_records",
+            "freshness", "evaluation_status", "usable_for_evaluation", "output_path",
+        }
+        conflicts = reserved.intersection(snapshot_metadata)
+        if conflicts:
+            raise ContractError(f"snapshot_metadata cannot override reserved fields: {', '.join(sorted(conflicts))}")
+        snapshot.update(snapshot_metadata)
+
+    if relative_output_dir is None:
+        output_dir = root / "benchmarks" / snapshot["snapshot_id"]
+    else:
+        relative = Path(relative_output_dir)
+        if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+            raise ContractError("relative_output_dir must be a safe path below self-v1")
+        output_dir = root / relative
+    output_path = output_dir / "api_benchmark_snapshot.json"
+
+    if immutable and (output_path.exists() or output_path.is_symlink()):
+        existing = load_json(output_path)
+        if existing != snapshot:
+            raise StorageError(f"immutable API benchmark snapshot conflicts with existing content: {output_path}")
+    else:
+        atomic_write_json(output_path, snapshot, root=root)
     snapshot["output_path"] = str(output_path)
     return snapshot
