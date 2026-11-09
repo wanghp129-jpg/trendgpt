@@ -26,6 +26,10 @@ Install the package in a virtual environment, review the source plan, and invoke
 
 The command is opt-in and bounded by per-source page limits. It writes raw source evidence, per-page SourceResult artifacts and candidate_keywords.json under the self-v1 namespace.
 
+## Steam pilot
+
+For a small VPS validation, use config/source-plan.steam-validation.json and follow docs/STEAM_PILOT.md. The plan is explicitly US-English and bounded to two pages of ten rows per Steam list. Do not treat this pilot as complete source coverage.
+
 ## First-seen ledger
 
 After a candidate snapshot has been written, record stable platform-ID history in the separate self-v1 ledger:
@@ -38,7 +42,7 @@ The command writes a separate enriched snapshot under first-seen/YYYY-MM-DD/RUN_
 
 - The source collector only discovers and normalizes; it does not run KD, Google Trends, domain checks, Feishu writes or website dispatch.
 - Preserve source records and partial/failure statuses. A parse with zero results is not proof of an empty source.
-- The current HTML adapters may report partial because they cannot prove full pagination.
+- The current Roblox and YouTube adapters may report partial because they cannot prove full pagination. The Steam adapter reads Recent Releases and Popular New Releases with category1=998, extracts stable AppIDs from Steam app URLs, reconciles page rows with data-total-count when present, and preserves release-date text rather than inventing timestamps. A bounded multi-page run remains partial when the page cap is reached before the declared total.
 - Video titles are unresolved clues, not game names, unless a separate identity-resolution step supplies candidate_name.
 - The collector does not mark API-independence eligibility true. That requires a later evidence-backed benchmark exposure adjudication.
 - Never write to the existing API output, state, claim, automatic queue or site.json.

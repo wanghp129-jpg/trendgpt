@@ -19,7 +19,10 @@ class _FakeAdapter:
             source_id="fixture", status="complete", fetched_at=request.fetched_at,
             scope=request.scope,
             items=[{"name": "Fixture Game", "platform": "fixture-platform", "platform_id": "id-1"}],
-            coverage={"fixture": True},
+            coverage={
+                "fixture": True, "page_start": 0, "page_size": request.page_limit,
+                "total_results": 1, "page_complete": True,
+            },
         )
 
 

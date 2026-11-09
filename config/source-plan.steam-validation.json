@@ -1,0 +1,25 @@
+{
+  "schema": "trendgpt-source-plan-v1",
+  "sources": [
+    {
+      "source": "steam",
+      "scope": {
+        "list_type": "recentreleases",
+        "country_code": "us",
+        "language": "english"
+      },
+      "page_limit": 10,
+      "max_pages": 2
+    },
+    {
+      "source": "steam",
+      "scope": {
+        "list_type": "popularnew",
+        "country_code": "us",
+        "language": "english"
+      },
+      "page_limit": 10,
+      "max_pages": 2
+    }
+  ]
+}

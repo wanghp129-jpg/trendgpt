@@ -68,6 +68,22 @@ The ledger does not infer cross-platform equivalence. A record with zero or mult
 - [ ] Implement the Playwright/CDP ChatGPT cleaner worker and validate its output schema.
 - [ ] Run an end-to-end shadow batch; verify task ownership, screenshot/evidence, output correctness, and no cross-task contamination.
 
+## Stage 2.1 — Steam Recent Releases / Popular New Releases pilot implementation
+
+- [x] Recognize Steam search_result_row markup as well as the legacy search_result fixture shape.
+- [x] Extract and reconcile numeric AppIDs from the app URL and data-ds-appid when present.
+- [x] Apply Steam's Games category filter (category1=998); reject package/bundle paths and AppID mismatches.
+- [x] Preserve release-date text, price/review metadata, list type, source rank, page cursor and hash-bound raw HTML evidence.
+- [x] Read data-total-count when available and reconcile expected rows for each page.
+- [x] Keep completeness unknown/partial when the source total is absent, rows mismatch, duplicate IDs occur, or the bounded page cap is reached.
+- [x] Add pagination cursor-cycle protection and aggregate page evidence into one source-plan result.
+- [x] Add a US-English Steam-only pilot plan bounded to two pages of ten rows for each of Recent Releases and Popular New Releases.
+- [ ] Run the bounded live Steam pilot on the VPS; verify current markup, public access, AppIDs, page totals and raw evidence.
+- [ ] Verify real Steam candidates through the first-seen ledger; confirm AppID and observed-at semantics.
+- [ ] Only after the live pilot passes, consider expanding Steam pagination or adding another Steam discovery endpoint.
+
+See docs/STEAM_PILOT.md. The checked-in pilot plan is a controlled validation scope, not a claim of complete Steam coverage.
+
 ## Stage 2 — source discovery
 
 1. Validate the Roblox Up-and-Coming and Top Playing Now adapters against current pages, stable identifiers, region/device scope and coverage.

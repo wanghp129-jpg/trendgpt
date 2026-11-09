@@ -110,15 +110,54 @@ def merge_source_results(
             parsed_records += 1
             identity = f"{platform}:{source_record_id}" if source_record_id is not None else f"{result.source_id}:{normalize_name(title)}:{position}"
             candidate_id = sha256(identity.encode("utf-8")).hexdigest()[:24]
+            source_record = {
+                "source_id": result.source_id,
+                "source_record_id": str(source_record_id) if source_record_id is not None else None,
+                "position": raw.get("source_rank", position),
+                "page_index": raw.get("source_page_index"),
+                "page_cursor": raw.get("source_page_cursor"),
+                "page_position": raw.get("source_page_position", position),
+                "fetched_at": result.fetched_at,
+                "url": raw.get("url"),
+                "list_type": raw.get("list_type"),
+                "published_at": raw.get("published_at"),
+            }
+            for field_name in (
+                "release_date_text", "release_date_iso", "release_date_precision",
+                "price_text", "review_summary", "discount_text", "result_kind",
+                "steam_item_key", "steam_tag_ids",
+            ):
+                if raw.get(field_name) is not None:
+                    source_record[field_name] = raw[field_name]
+
             if identity in seen:
                 candidate = seen[identity]
-                candidate["raw_titles"].append(title)
-                candidate["sources"].append({
-                    "source_id": result.source_id,
-                    "source_record_id": str(source_record_id) if source_record_id is not None else None,
-                    "position": position, "fetched_at": result.fetched_at, "url": raw.get("url"),
-                })
+                if title not in candidate["raw_titles"]:
+                    candidate["raw_titles"].append(title)
+                candidate["sources"].append(source_record)
+                for evidence in result.evidence_refs:
+                    if evidence not in candidate["raw_evidence_refs"]:
+                        candidate["raw_evidence_refs"].append(evidence)
+                metadata = {
+                    key: raw.get(key) for key in (
+                        "list_type", "release_date_text", "release_date_iso",
+                        "price_text", "review_summary", "discount_text",
+                        "result_kind", "steam_item_key", "steam_tag_ids",
+                    ) if raw.get(key) is not None
+                }
+                if metadata and metadata not in candidate["source_metadata"]:
+                    candidate["source_metadata"].append(metadata)
+                reason = raw.get("discovery_reason")
+                if isinstance(reason, str) and reason and reason not in candidate["discovery_reasons"]:
+                    candidate["discovery_reasons"].append(reason)
                 continue
+            source_metadata = {
+                key: raw.get(key) for key in (
+                    "list_type", "release_date_text", "release_date_iso",
+                    "price_text", "review_summary", "discount_text",
+                    "result_kind", "steam_item_key", "steam_tag_ids",
+                ) if raw.get(key) is not None
+            }
             candidate = {
                 "candidate_id": candidate_id,
                 "entity_id": f"provisional:{candidate_id}",
@@ -138,15 +177,11 @@ def merge_source_results(
                 "independent_eligibility": {
                     "eligible": None, "reason": "API exposure chronology has not been adjudicated",
                 },
-                "sources": [{
-                    "source_id": result.source_id,
-                    "source_record_id": str(source_record_id) if source_record_id is not None else None,
-                    "position": position, "fetched_at": result.fetched_at, "url": raw.get("url"),
-                    "list_type": raw.get("list_type"), "published_at": raw.get("published_at"),
-                }],
+                "sources": [source_record],
+                "source_metadata": [source_metadata] if source_metadata else [],
                 "platform_signals": raw.get("signals", []) if isinstance(raw.get("signals", []), list) else [],
                 "discovery_reasons": [str(raw.get("discovery_reason") or f"observed in {result.source_id}")],
-                "raw_evidence_refs": result.evidence_refs,
+                "raw_evidence_refs": list(result.evidence_refs),
                 "missing_fields": [],
             }
             seen[identity] = candidate

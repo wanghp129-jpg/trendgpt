@@ -17,7 +17,7 @@ from .ingest_reader import read_api_ingest_morning_batch
 from .entity_ledger import EntityFirstSeenLedger
 from .rule_replay import replay_rules
 from .rules import evaluate_feature_groups
-from .sources import SourceRequest, merge_source_results
+from .sources import SourceRequest, SourceResult, merge_source_results
 from .storage import StorageError, atomic_write_json
 
 
@@ -148,9 +148,10 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
     plan = load_json(args.source_plan)
     if not isinstance(plan, dict) or plan.get("schema") != "trendgpt-source-plan-v1" or not isinstance(plan.get("sources"), list):
         raise ContractError("source plan must use schema trendgpt-source-plan-v1 with a sources array")
+
     run_key = sha256(args.run_id.encode("utf-8")).hexdigest()[:16]
-    source_results = []
-    source_summary = []
+    source_results: list[SourceResult] = []
+    source_summary: list[dict[str, Any]] = []
 
     for source_index, spec in enumerate(plan["sources"]):
         if not isinstance(spec, dict) or spec.get("source") not in {"steam", "roblox", "youtube"}:
@@ -159,36 +160,196 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
         scope = spec.get("scope")
         if not isinstance(scope, dict):
             raise ContractError(f"source plan entry {source_index} requires a scope object")
-        page_limit = int(spec.get("page_limit", 50))
-        configured_max = int(spec.get("max_pages", args.max_pages_per_source))
+        try:
+            page_limit = int(spec.get("page_limit", 50))
+            configured_max = int(spec.get("max_pages", args.max_pages_per_source))
+        except (TypeError, ValueError) as exc:
+            raise ContractError(f"source plan entry {source_index} has invalid page limits") from exc
         max_pages = min(configured_max, args.max_pages_per_source)
         if page_limit < 1 or page_limit > 50 or max_pages < 1:
             raise ContractError(f"source plan entry {source_index} has invalid page limits")
-        cursor = None
-        pages = []
+
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        pages: list[SourceResult] = []
+        stop_reason = "max_pages_reached"
         adapter = _make_adapter(source)
-        for _page_number in range(max_pages):
+
+        for page_number in range(max_pages):
+            cursor_key = cursor if cursor is not None else "0"
+            if cursor_key in seen_cursors:
+                stop_reason = "pagination_cursor_cycle"
+                break
+            seen_cursors.add(cursor_key)
+
             request = SourceRequest(
-                run_id=f"{args.run_id}-{source_index}", source_id=source,
+                run_id=f"{args.run_id}-{source_index}",
+                source_id=source,
                 fetched_at=datetime.now(timezone.utc).isoformat(),
                 scope={**scope, "source_plan_index": source_index},
-                evidence_root=str(root), cursor=cursor, page_limit=page_limit,
+                evidence_root=str(root),
+                cursor=cursor,
+                page_limit=page_limit,
             )
             result = adapter.fetch(request).validate()
             pages.append(result)
-            source_results.append(result)
-            page_name = cursor or "first"
-            page_path = root / "runs" / run_key / f"{source}-{source_index}-page-{page_name}.json"
+
+            page_path = root / "runs" / run_key / f"{source}-{source_index}-page-{page_number + 1:02d}.json"
             atomic_write_json(page_path, result.to_dict(), root=root)
-            if result.status in {"failed", "blocked"} or not result.next_cursor:
+
+            if result.status in {"failed", "blocked"}:
+                stop_reason = "source_error"
                 break
-            cursor = result.next_cursor
+            if not result.next_cursor:
+                stop_reason = "source_reported_no_next_cursor"
+                break
+
+            next_cursor = str(result.next_cursor)
+            if next_cursor == cursor_key or next_cursor in seen_cursors:
+                stop_reason = "pagination_cursor_cycle"
+                break
+            cursor = next_cursor
+        else:
+            if pages and pages[-1].next_cursor:
+                stop_reason = "max_pages_reached"
+            else:
+                stop_reason = "source_reported_no_next_cursor"
+
+        page_starts: list[int] = []
+        page_sizes: list[int] = []
+        totals: list[int] = []
+        all_pages_complete = bool(pages)
+        all_items: list[dict[str, Any]] = []
+        all_evidence_refs: list[dict[str, str]] = []
+        all_errors: list[dict[str, Any]] = []
+        seen_platform_ids: set[str] = set()
+        duplicate_ids_across_pages = 0
+
+        for page_index, page in enumerate(pages):
+            coverage = page.coverage if isinstance(page.coverage, dict) else {}
+            raw_start = coverage.get("page_start", page.cursor)
+            if isinstance(raw_start, int) and not isinstance(raw_start, bool):
+                page_starts.append(raw_start)
+            raw_size = coverage.get("page_size", page_limit)
+            if isinstance(raw_size, int) and not isinstance(raw_size, bool):
+                page_sizes.append(raw_size)
+            raw_total = coverage.get("total_results")
+            if isinstance(raw_total, int) and not isinstance(raw_total, bool):
+                totals.append(raw_total)
+
+            all_pages_complete = all_pages_complete and coverage.get("page_complete") is True
+            for position, item in enumerate(page.items):
+                enriched = {
+                    **item,
+                    "source_page_index": page_index,
+                    "source_page_cursor": page.cursor,
+                    "source_page_position": position,
+                }
+                if isinstance(raw_start, int) and not isinstance(raw_start, bool):
+                    enriched["source_rank"] = raw_start + position + 1
+                platform_id = enriched.get("platform_id") or enriched.get("source_record_id")
+                if isinstance(platform_id, (str, int)):
+                    key = str(platform_id)
+                    if key in seen_platform_ids:
+                        duplicate_ids_across_pages += 1
+                    else:
+                        seen_platform_ids.add(key)
+                all_items.append(enriched)
+
+            for ref in page.evidence_refs:
+                if ref not in all_evidence_refs:
+                    all_evidence_refs.append(ref)
+            for error in page.errors:
+                all_errors.append({"page_index": page_index, **error})
+
+        totals_consistent = bool(totals) and len(set(totals)) == 1 and len(totals) == len(pages)
+        total_results = totals[0] if totals_consistent else None
+        page_size_consistent = bool(page_sizes) and len(set(page_sizes)) == 1 and len(page_sizes) == len(pages)
+        page_size_used = page_sizes[0] if page_size_consistent else None
+        sequential_pages = (
+            page_size_used is not None
+            and page_starts == [index * page_size_used for index in range(len(page_starts))]
+            and len(page_starts) == len(pages)
+        )
+        unique_platform_ids = len(seen_platform_ids)
+        pagination_complete = (
+            stop_reason == "source_reported_no_next_cursor"
+            and all_pages_complete
+            and totals_consistent
+            and page_size_consistent
+            and sequential_pages
+            and total_results is not None
+            and unique_platform_ids == total_results
+            and len(all_items) == unique_platform_ids
+            and duplicate_ids_across_pages == 0
+        )
+
+        if not pages:
+            aggregate_status = "failed"
+        elif not all_items and all(page.status == "blocked" for page in pages):
+            aggregate_status = "blocked"
+        elif not all_items and all(page.status == "failed" for page in pages):
+            aggregate_status = "failed"
+        else:
+            aggregate_status = "complete" if pagination_complete else "partial"
+
+        if duplicate_ids_across_pages:
+            all_errors.append({
+                "code": "duplicate_platform_ids_across_pages",
+                "retryable": False,
+                "count": duplicate_ids_across_pages,
+            })
+
+        last_page = pages[-1] if pages else None
+        aggregate_next_cursor = (
+            None if pagination_complete or last_page is None
+            else last_page.next_cursor
+        )
+        aggregate_scope = {
+            **scope,
+            "source_plan_index": source_index,
+            "page_limit": page_limit,
+            "max_pages": max_pages,
+        }
+        aggregate_coverage = {
+            "pages_fetched": len(pages),
+            "page_starts": page_starts,
+            "page_size": page_size_used,
+            "total_results": total_results,
+            "raw_items": len(all_items),
+            "unique_platform_ids": unique_platform_ids,
+            "duplicate_platform_ids_across_pages": duplicate_ids_across_pages,
+            "all_pages_complete": all_pages_complete,
+            "pagination_complete": pagination_complete,
+            "stop_reason": stop_reason,
+        }
+        aggregate = SourceResult(
+            source_id=source,
+            status=aggregate_status,
+            fetched_at=pages[0].fetched_at if pages else datetime.now(timezone.utc).isoformat(),
+            scope=aggregate_scope,
+            items=all_items,
+            cursor="0",
+            next_cursor=aggregate_next_cursor,
+            coverage=aggregate_coverage,
+            evidence_refs=all_evidence_refs,
+            errors=all_errors,
+        ).validate()
+        source_results.append(aggregate)
         source_summary.append({
-            "source": source, "source_plan_index": source_index,
-            "pages": len(pages), "statuses": [page.status for page in pages],
-            "items": sum(len(page.items) for page in pages),
-            "last_cursor": pages[-1].cursor if pages else None,
-            "next_cursor": pages[-1].next_cursor if pages else None,
+            "source": source,
+            "source_plan_index": source_index,
+            "status": aggregate.status,
+            "pages": len(pages),
+            "items": len(all_items),
+            "unique_platform_ids": unique_platform_ids,
+            "duplicate_platform_ids_across_pages": duplicate_ids_across_pages,
+            "total_results": total_results,
+            "next_cursor": aggregate_next_cursor,
+            "pagination_complete": pagination_complete,
+            "stop_reason": stop_reason,
+            "errors": all_errors,
+            "evidence_refs": all_evidence_refs,
         })
 
     collected_at = datetime.now(timezone.utc).isoformat()
@@ -202,14 +363,15 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
     candidate_path = root / "runs" / run_key / "candidate_keywords.json"
     atomic_write_json(candidate_path, snapshot, root=root)
     return {
-        "status": snapshot["collection_status"], "run_id": args.run_id,
+        "status": snapshot["collection_status"],
+        "run_id": args.run_id,
         "candidate_count": len(snapshot["candidates"]),
         "unparsed_count": snapshot["counts"]["unparsed_records"],
-        "source_summary": source_summary, "candidate_path": str(candidate_path),
-        "source_fetch_calls": sum(len(item["statuses"]) for item in source_summary),
+        "source_summary": source_summary,
+        "candidate_path": str(candidate_path),
+        "source_fetch_calls": sum(item["pages"] for item in source_summary),
         "note": "partial coverage is retained honestly; no KD, trend decision, API injection, or build dispatch occurs",
     }
-
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
