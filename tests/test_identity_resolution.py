@@ -252,6 +252,8 @@ class CandidateResolutionTests(unittest.TestCase):
                 ],
             }]
             resolved, report = resolve_candidate_snapshot(snapshot, plan, input_sha256=digest)
+            ledger_root = root / "ledger" / "self-v1"
+            result = EntityFirstSeenLedger(ledger_root).record_snapshot(resolved)
 
         self.assertEqual(len(resolved["candidates"]), 1)
         self.assertEqual(resolved["candidates"][0]["platform_ids"], {"steam": "12345", "roblox": "98765"})

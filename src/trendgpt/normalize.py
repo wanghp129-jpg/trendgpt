@@ -18,6 +18,7 @@ def normalize_entity_key(value: str) -> str:
     """Normalize punctuation/symbol variants for comparison, not automatic identity merging."""
     if not isinstance(value, str):
         raise TypeError("candidate name must be a string")
+    value = value.replace("™", " ").replace("®", " ").replace("©", " ")
     value = unicodedata.normalize("NFKC", value).casefold()
     normalized = []
     for char in value:

@@ -111,13 +111,14 @@ class CandidateResolutionCliTests(unittest.TestCase):
             report_path = Path(result["report_path"])
             resolved = json.loads(output_path.read_text(encoding="utf-8"))
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            original_unchanged = input_path.read_bytes() == original_bytes
 
         self.assertEqual(prepared["status"], "plan_prepared")
         self.assertEqual(result["status"], "resolved")
         self.assertEqual(result["applied"]["linked"], 1)
         self.assertEqual(len(resolved["candidates"][0]["supplementary_evidence"]), 1)
         self.assertTrue(report["original_candidate_unchanged"])
-        self.assertEqual(input_path.read_bytes(), original_bytes)
+        self.assertTrue(original_unchanged)
         validate_candidate_snapshot(resolved)
 
     def test_prepare_rejects_input_outside_self_v1(self):
