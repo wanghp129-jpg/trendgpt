@@ -10,12 +10,12 @@ Candidate Resolver implements Lesson 14's post-collection step:
 4. retain ambiguous records for review;
 5. produce a new resolved candidate snapshot without modifying the original collection output.
 
-The resolver is deliberately conservative. Similar names, shared words, matching thumbnails, channel names, or a YouTube video ID are not sufficient identity proof.
+The resolver is deliberately conservative. Similar names, shared words, matching thumbnails, channel names, or a YouTube video ID are not sufficient identity proof. The v2 review-plan projection is intentionally incompatible with v1 plans; regenerate a hash-bound v2 plan after any source-snapshot replay rather than reusing old proposals.
 
 ## Current implementation boundary
 
 - No LLM/API call is made by this module.
-- prepare-resolution creates a deterministic review plan containing the original clue, description, channel/video evidence, exact phrase suggestions and hash-bound evidence references.
+- prepare-resolution creates a deterministic v2 review plan containing the original clue, description excerpt and its provenance, explicit video_id, published_at (including null), channel/video context, exact phrase suggestions and hash-bound evidence references.
 - ChatGPT or a human reviewer can inspect that plan and fill decisions.
 - resolve-candidates applies only decisions with approval_status=approved and a non-empty reviewed_by and reason.
 - Pending or unresolved decisions remain in unparsed_items.
@@ -37,7 +37,9 @@ The collection merge already deduplicates repeated records by stable platform id
 
 normalize_entity_key applies Unicode NFKC, case folding, punctuation/symbol normalization and whitespace collapse. It is used for comparison and alias de-duplication only.
 
-The plan may suggest a candidate when its full normalized name or alias occurs as a phrase in the YouTube title/description. Suggestions are advisory. They do not approve a link or merge.
+The v2 plan carries `video_id` explicitly in addition to `source_record_id`, and projects `published_at` explicitly even when it is null. It also retains channel URL, duration, view-count, thumbnail and description-excerpt provenance fields when present. These fields are review context, not identity proof.
+
+The plan may suggest a candidate when its full normalized name or alias occurs as a phrase in the YouTube title/description excerpt. Suggestions are advisory. They do not approve a link or merge.
 
 Short names are omitted from automatic phrase suggestions to reduce false positives.
 

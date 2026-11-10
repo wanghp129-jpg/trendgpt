@@ -72,11 +72,19 @@ def _snapshot(root: Path, *, include_clue=True, two_candidates=False):
             "url": "https://www.youtube.com/watch?v=abcdefghijk",
             "channel_name": "Indie Studio",
             "channel_id": "UCabcdefghijk",
+            "channel_url": "https://www.youtube.com/channel/UCabcdefghijk",
             "query": "releasedategameplay",
             "query_role": "release_date_gameplay",
             "published_time_text": "2 hours ago",
             "published_at": None,
+            "duration_text": "12:34",
+            "view_count_text": "1.2K views",
+            "thumbnail_url": "https://i.ytimg.com/vi/abcdefghijk/default.jpg",
             "description_snippet": "Official gameplay reveal for Neon Drift",
+            "description_snippet_parts": ["Official gameplay reveal for Neon Drift"],
+            "description_snippet_source": "detailedMetadataSnippets[].snippetText",
+            "description_snippet_completeness": "search_result_excerpt",
+            "description_snippet_hover_texts": ["From the video description"],
         },
     }
     snapshot = {
@@ -127,8 +135,30 @@ class CandidateResolutionTests(unittest.TestCase):
         decision = plan["decisions"][0]
         self.assertEqual(decision["action"], "unresolved")
         self.assertEqual(decision["approval_status"], "pending")
+        self.assertEqual(decision["video_id"], "abcdefghijk")
+        self.assertEqual(decision["published_at"], None)
+        self.assertEqual(decision["channel_url"], "https://www.youtube.com/channel/UCabcdefghijk")
+        self.assertEqual(decision["duration_text"], "12:34")
+        self.assertEqual(decision["view_count_text"], "1.2K views")
+        self.assertEqual(decision["description_snippet_source"], "detailedMetadataSnippets[].snippetText")
+        self.assertEqual(decision["description_snippet_completeness"], "search_result_excerpt")
+        self.assertEqual(decision["description_snippet_parts"], ["Official gameplay reveal for Neon Drift"])
+        self.assertEqual(decision["description_snippet_hover_texts"], ["From the video description"])
         self.assertEqual(decision["matching_suggestions"][0]["candidate_id"], "candidate-steam-1")
         self.assertTrue(plan["instructions"]["automatic_merging"] is False)
+
+    def test_legacy_v1_review_plan_is_rejected_by_v2_resolver(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            snapshot, _ = _snapshot(root)
+            input_path = root / "candidate_keywords.json"
+            input_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            digest = file_sha256(input_path)
+            plan = prepare_resolution_plan(snapshot, input_path=str(input_path), input_sha256=digest)
+            plan["schema"] = "self-candidate-resolution-plan-v1"
+
+            with self.assertRaises(ContractError):
+                resolve_candidate_snapshot(snapshot, plan, input_sha256=digest)
 
     def test_approved_youtube_clue_links_to_existing_game_without_using_video_id_as_game_id(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -154,7 +184,20 @@ class CandidateResolutionTests(unittest.TestCase):
         candidate = resolved["candidates"][0]
         self.assertEqual(candidate["platform_ids"], {"steam": "12345"})
         self.assertEqual(candidate["supplementary_evidence"][0]["source_record_id"], "abcdefghijk")
+        self.assertEqual(candidate["supplementary_evidence"][0]["video_id"], "abcdefghijk")
         self.assertEqual(candidate["supplementary_evidence"][0]["published_at"], None)
+        self.assertEqual(
+            candidate["supplementary_evidence"][0]["description_snippet"],
+            "Official gameplay reveal for Neon Drift",
+        )
+        self.assertEqual(
+            candidate["supplementary_evidence"][0]["description_snippet_source"],
+            "detailedMetadataSnippets[].snippetText",
+        )
+        self.assertEqual(
+            candidate["supplementary_evidence"][0]["description_snippet_completeness"],
+            "search_result_excerpt",
+        )
         self.assertEqual(candidate["first_self_discovered_at"], "2026-11-10T00:00:30+08:00")
         self.assertIn("Neon Drift Game", candidate["aliases"])
         self.assertEqual(resolved["unparsed_items"][0]["resolution_status"], "linked_to_candidate")

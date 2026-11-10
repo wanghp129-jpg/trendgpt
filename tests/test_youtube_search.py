@@ -92,6 +92,10 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
         self.assertEqual(item["search_filter"], UPLOAD_DATE_FILTER)
         self.assertEqual(item["query_role"], "release_date_gameplay")
         self.assertEqual(item["identity_status"], "unresolved_video_title")
+        self.assertEqual(item["description_snippet"], "Official gameplay reveal")
+        self.assertEqual(item["description_snippet_source"], "descriptionSnippet")
+        self.assertEqual(item["description_snippet_completeness"], "search_result_excerpt")
+        self.assertEqual(item["description_snippet_parts"], ["Official gameplay reveal"])
         self.assertNotIn("candidate_name", item)
         self.assertTrue(result.coverage["continuation_present"])
         self.assertFalse(result.coverage["identity_resolved"])
@@ -100,6 +104,108 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
         query = parse_qs(urlsplit(fetch.call_args.args[0]).query)
         self.assertEqual(query["search_query"], ["releasedategameplay"])
         self.assertEqual(query["sp"], [UPLOAD_DATE_FILTER])
+
+    def test_falls_back_to_detailed_metadata_snippets_and_preserves_excerpt_provenance(self):
+        renderer = _video("abcdefghijk", "Path of Exile 2 gameplay")["videoRenderer"]
+        renderer["descriptionSnippet"] = ""
+        renderer["detailedMetadataSnippets"] = [
+            {
+                "snippetText": {"runs": [
+                    {"text": "Path of Exile 2 "},
+                    {"text": "features "},
+                    {"text": "new classes"},
+                ]},
+                "snippetHoverText": {"simpleText": "From the video description"},
+            },
+            {
+                "snippetText": {"simpleText": "Shadow and Duelist gameplay"},
+                "snippetHoverText": {"runs": [{"text": "From the video description"}]},
+            },
+        ]
+        renderer["expandableMetadata"] = {
+            "expandableMetadataRenderer": {
+                "header": {"expandedTitle": "AI-generated video summary"},
+                "expandedContent": {
+                    "videoSummaryContentViewModel": {"text": "AI summary must stay separate"}
+                },
+            }
+        }
+        renderer["chapters"] = [{"title": "Chapter One"}]
+        html = _page({"videoRenderer": renderer})
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "self-v1"
+            with patch("trendgpt.adapters.youtube_search.get_public_text", return_value=html) as fetch:
+                result = YouTubeSearchAdapter().fetch(_request(root))
+            fetch.assert_called_once()
+
+        item = result.items[0]
+        expected = "Path of Exile 2 features new classes\nShadow and Duelist gameplay"
+        self.assertEqual(item["description_snippet"], expected)
+        self.assertEqual(
+            item["description_snippet_parts"],
+            ["Path of Exile 2 features new classes", "Shadow and Duelist gameplay"],
+        )
+        self.assertEqual(item["description_snippet_source"], "detailedMetadataSnippets[].snippetText")
+        self.assertEqual(item["description_snippet_completeness"], "search_result_excerpt")
+        self.assertEqual(
+            item["description_snippet_hover_texts"],
+            ["From the video description", "From the video description"],
+        )
+        self.assertNotIn("AI summary must stay separate", item["description_snippet"])
+        self.assertNotIn("Chapter One", item["description_snippet"])
+        self.assertNotIn("candidate_name", item)
+
+        snapshot = validate_candidate_snapshot(merge_source_results(
+            [result],
+            run_id="youtube-test-run",
+            run_date="2026-11-10",
+            slot="00",
+            timezone="Asia/Shanghai",
+            started_at="2026-11-10T00:00:00+08:00",
+            collected_at="2026-11-10T00:01:00+08:00",
+            cutoff_at="2026-11-10T00:02:00+08:00",
+            code_version="test",
+            normalization_version="test",
+            source_policy_version="test",
+        ))
+        clue = snapshot["unparsed_items"][0]
+        self.assertEqual(clue["raw_record"]["description_snippet"], expected)
+        self.assertEqual(clue["raw_record"]["description_snippet_parts"], item["description_snippet_parts"])
+
+    def test_prefers_nonempty_description_snippet_over_detailed_metadata_snippets(self):
+        renderer = _video("abcdefghijk", "Game One Gameplay")["videoRenderer"]
+        renderer["detailedMetadataSnippets"] = [{
+            "snippetText": {"simpleText": "Fallback excerpt"},
+            "snippetHoverText": {"simpleText": "From the video description"},
+        }]
+        html = _page({"videoRenderer": renderer})
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "self-v1"
+            with patch("trendgpt.adapters.youtube_search.get_public_text", return_value=html):
+                result = YouTubeSearchAdapter().fetch(_request(root))
+
+        item = result.items[0]
+        self.assertEqual(item["description_snippet"], "Official gameplay reveal")
+        self.assertEqual(item["description_snippet_source"], "descriptionSnippet")
+        self.assertEqual(item["description_snippet_parts"], ["Official gameplay reveal"])
+
+    def test_marks_description_unavailable_when_both_search_excerpt_fields_are_missing(self):
+        renderer = _video("abcdefghijk", "Game One Gameplay")["videoRenderer"]
+        renderer.pop("descriptionSnippet")
+        renderer.pop("detailedMetadataSnippets", None)
+        html = _page({"videoRenderer": renderer})
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "self-v1"
+            with patch("trendgpt.adapters.youtube_search.get_public_text", return_value=html):
+                result = YouTubeSearchAdapter().fetch(_request(root))
+
+        item = result.items[0]
+        self.assertIsNone(item["description_snippet"])
+        self.assertEqual(item["description_snippet_parts"], [])
+        self.assertIsNone(item["description_snippet_source"])
+        self.assertEqual(item["description_snippet_completeness"], "unavailable")
+        self.assertEqual(item["description_snippet_hover_texts"], [])
 
     def test_video_titles_remain_unparsed_clues_not_game_candidates(self):
         html = _page(_video("abcdefghijk", "NEW GAME Official Gameplay Trailer"))

@@ -12,6 +12,8 @@ I will provide:
 
 Use only those supplied artifacts. Do not browse the web unless I explicitly ask you to research or verify externally.
 
+The v2 plan may expose `video_id` separately from `source_record_id`, `published_at` (which may be null), channel/video context and description-excerpt provenance. A description excerpt is not the complete video description. Treat `snippetHoverText` as attribution metadata, not as game-identity proof.
+
 ## Identity rules
 
 - Steam AppID identifies a Steam app.

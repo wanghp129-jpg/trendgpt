@@ -112,6 +112,32 @@ def _collect_renderers(primary: object) -> tuple[list[dict[str, Any]], bool]:
     return videos, continuation_present
 
 
+def _extract_description_snippet(
+    renderer: dict[str, Any],
+) -> tuple[str | None, list[str], str | None, list[str | None]]:
+    """Extract a search-result description excerpt without claiming it is complete."""
+    direct = _text_value(renderer.get("descriptionSnippet"))
+    if direct:
+        return direct, [direct], "descriptionSnippet", []
+
+    detailed = renderer.get("detailedMetadataSnippets")
+    parts: list[str] = []
+    hover_texts: list[str | None] = []
+    if isinstance(detailed, list):
+        for entry in detailed:
+            if not isinstance(entry, dict):
+                continue
+            text = _text_value(entry.get("snippetText"))
+            if not text:
+                continue
+            parts.append(text)
+            hover_texts.append(_text_value(entry.get("snippetHoverText")))
+
+    if not parts:
+        return None, [], None, []
+    return "\n".join(parts), parts, "detailedMetadataSnippets[].snippetText", hover_texts
+
+
 def _parse_video(renderer: dict[str, Any], *, query: str, query_role: str | None, rank: int) -> dict[str, Any] | None:
     video_id = renderer.get("videoId")
     if not isinstance(video_id, str) or not VIDEO_ID_RE.fullmatch(video_id):
@@ -141,7 +167,12 @@ def _parse_video(renderer: dict[str, Any], *, query: str, query_role: str | None
                         break
 
     published_text = _text_value(renderer.get("publishedTimeText"))
-    description = _text_value(renderer.get("descriptionSnippet"))
+    (
+        description,
+        description_parts,
+        description_source,
+        description_hover_texts,
+    ) = _extract_description_snippet(renderer)
     duration = _text_value(renderer.get("lengthText"))
     views = _text_value(renderer.get("viewCountText"))
     thumbnails = renderer.get("thumbnail", {}).get("thumbnails", []) if isinstance(renderer.get("thumbnail"), dict) else []
@@ -167,6 +198,12 @@ def _parse_video(renderer: dict[str, Any], *, query: str, query_role: str | None
         "duration_text": duration,
         "view_count_text": views,
         "description_snippet": description,
+        "description_snippet_parts": description_parts,
+        "description_snippet_source": description_source,
+        "description_snippet_completeness": (
+            "search_result_excerpt" if description else "unavailable"
+        ),
+        "description_snippet_hover_texts": description_hover_texts,
         "thumbnail_url": thumbnail_url,
         "query": query,
         "query_role": query_role,

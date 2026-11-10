@@ -19,8 +19,8 @@ from .contracts import ContractError, validate_candidate_snapshot
 from .normalize import normalize_entity_key
 from .storage import reject_symlink_components
 
-PLAN_SCHEMA = "self-candidate-resolution-plan-v1"
-RESOLVER_VERSION = "candidate-resolver-v1"
+PLAN_SCHEMA = "self-candidate-resolution-plan-v2"
+RESOLVER_VERSION = "candidate-resolver-v2"
 ACTIONS = {"unresolved", "link_existing", "create_candidate", "not_game"}
 APPROVALS = {"pending", "approved"}
 VIDEO_SOURCE = "youtube"
@@ -128,11 +128,27 @@ def prepare_resolution_plan(snapshot: dict[str, Any], *, input_path: str, input_
             "query": raw.get("query"),
             "query_role": raw.get("query_role"),
             "title": raw.get("title"),
+            "video_id": raw.get("video_id"),
             "description_snippet": raw.get("description_snippet"),
+            "description_snippet_parts": (
+                list(raw.get("description_snippet_parts", []))
+                if isinstance(raw.get("description_snippet_parts"), list) else []
+            ),
+            "description_snippet_source": raw.get("description_snippet_source"),
+            "description_snippet_completeness": raw.get("description_snippet_completeness"),
+            "description_snippet_hover_texts": (
+                list(raw.get("description_snippet_hover_texts", []))
+                if isinstance(raw.get("description_snippet_hover_texts"), list) else []
+            ),
             "channel_name": raw.get("channel_name"),
             "channel_id": raw.get("channel_id"),
+            "channel_url": raw.get("channel_url"),
             "video_url": raw.get("url"),
+            "duration_text": raw.get("duration_text"),
+            "view_count_text": raw.get("view_count_text"),
+            "thumbnail_url": raw.get("thumbnail_url"),
             "published_time_text": raw.get("published_time_text"),
+            "published_at": raw.get("published_at"),
             "fetched_at": item.get("fetched_at"),
             "raw_evidence_refs": _evidence_refs(item),
             "matching_suggestions": _suggest_matches(raw, candidates),
@@ -248,16 +264,31 @@ def _supplementary_evidence(clue: dict[str, Any], decision: dict[str, Any], refs
     return {
         "source_id": "youtube",
         "source_record_id": str(clue.get("source_record_id")),
+        "video_id": raw.get("video_id"),
         "video_url": raw.get("url"),
         "title": raw.get("title"),
         "channel_name": raw.get("channel_name"),
         "channel_id": raw.get("channel_id"),
+        "channel_url": raw.get("channel_url"),
         "query": raw.get("query"),
         "query_role": raw.get("query_role"),
         "published_time_text": raw.get("published_time_text"),
-        "published_at": None,
+        "published_at": raw.get("published_at"),
         "fetched_at": clue.get("fetched_at"),
+        "duration_text": raw.get("duration_text"),
+        "view_count_text": raw.get("view_count_text"),
+        "thumbnail_url": raw.get("thumbnail_url"),
         "description_snippet": raw.get("description_snippet"),
+        "description_snippet_parts": (
+            list(raw.get("description_snippet_parts", []))
+            if isinstance(raw.get("description_snippet_parts"), list) else []
+        ),
+        "description_snippet_source": raw.get("description_snippet_source"),
+        "description_snippet_completeness": raw.get("description_snippet_completeness"),
+        "description_snippet_hover_texts": (
+            list(raw.get("description_snippet_hover_texts", []))
+            if isinstance(raw.get("description_snippet_hover_texts"), list) else []
+        ),
         "raw_evidence_refs": refs,
         "identity_decision": {
             "action": decision["action"],

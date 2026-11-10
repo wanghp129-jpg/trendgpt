@@ -27,15 +27,17 @@ The adapter preserves:
 - channel name, channel ID and channel URL when present;
 - relative published-time text;
 - duration and view-count text;
-- description snippet;
+- description excerpt, including its source field, excerpt completeness marker, ordered text parts and hover attribution when supplied;
 - search query and rank;
 - raw HTML evidence and SHA-256.
 
 It deliberately does not set candidate_name, name or keyword. The existing candidate normalizer therefore retains these records in unparsed_items instead of incorrectly turning titles such as "NEW UPDATE", creator names, reaction videos or unrelated entertainment into game candidates.
 
-A later identity-resolution step must determine the actual game name from the video title, description and supporting evidence. Ambiguous cases stay unresolved; do not fuzzy-merge them into Steam or Roblox entities.
+A later identity-resolution step must determine the actual game name from the video title, description excerpt and supporting evidence. The excerpt source, ordered parts, hover attribution and excerpt-only status are preserved; they do not represent the full video description. Ambiguous cases stay unresolved; do not fuzzy-merge them into Steam or Roblox entities.
 
-The visible published-time label (for example, "2 hours ago") is relative text, not an exact publication timestamp. published_at remains null until an authoritative absolute timestamp is available.
+The adapter prefers a non-empty `descriptionSnippet`. If it is missing or empty, it reads `detailedMetadataSnippets[].snippetText` in source order, joins multiple parts with newline separators, and preserves the individual parts and `snippetHoverText` values. It does not fold expandable chapter cards or an "AI-generated video summary" into the author-description excerpt.
+
+The visible published-time label (for example, "2 hours ago") is relative text, not an exact publication timestamp. `published_at` remains null until an authoritative absolute timestamp is available.
 
 ## Fixed pilot scope
 
@@ -80,7 +82,7 @@ For each query, inspect:
 - raw video renderer count, accepted count, overflow count and invalid count;
 - video ID and watch URL;
 - channel ID/name/URL when supplied;
-- title and description snippet;
+- title and description excerpt, including source, ordered parts, hover attribution and the explicit excerpt/unavailable marker;
 - relative published-time text and null absolute published_at;
 - query role, rank and fetched_at;
 - continuation presence and explicit single-page limitation;
