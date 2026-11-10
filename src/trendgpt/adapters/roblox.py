@@ -25,7 +25,7 @@ SORT_IDS = {
     "up-and-coming": "up-and-coming",
     "top-playing-now": "top-playing-now",
 }
-COUNTRY_RE = re.compile(r"^[a-z]{2}$")
+COUNTRY_RE = re.compile(r"^(?:[a-z]{2}|all)$")
 ALLOWED_DEVICES = {"computer", "phone", "tablet", "all", "console"}
 MAX_PAGE_ROWS = 50
 MAX_PAGE_TOKEN_LENGTH = 1024
@@ -50,6 +50,35 @@ def _non_negative_int(value: object) -> int | None:
         return int(value)
     return None
 
+
+
+
+def _response_scope(body: object) -> tuple[str | None, str | None, str]:
+    """Read only explicit response scope declarations; never infer from request params."""
+    if not isinstance(body, dict):
+        return None, None, "unverified"
+    containers = [body]
+    for key in ("scope", "request", "filters", "metadata", "context"):
+        value = body.get(key)
+        if isinstance(value, dict):
+            containers.append(value)
+    country = device = None
+    for container in containers:
+        if country is None:
+            for key in ("country", "countryCode", "region", "regionCode"):
+                value = container.get(key)
+                if isinstance(value, str) and value.strip():
+                    country = value.strip().lower()
+                    break
+        if device is None:
+            for key in ("device", "deviceType", "platform"):
+                value = container.get(key)
+                if isinstance(value, str) and value.strip():
+                    device = value.strip().lower()
+                    break
+    if country is None or device is None:
+        return country, device, "unverified"
+    return country, device, "declared"
 
 def _extract_game_rows(body: object) -> tuple[list[object], str | None]:
     """Accept known observed list containers, but never recursively guess rows."""
@@ -215,6 +244,18 @@ class RobloxChartAdapter:
                 errors=[{"code": "invalid_json_response", "retryable": False}],
             )
 
+        effective_country, effective_device, response_scope_status = _response_scope(body)
+        requested_country = country.lower()
+        requested_device = device
+        scope_matches = (
+            effective_country == requested_country
+            and effective_device == requested_device
+        ) if response_scope_status == "declared" else False
+        scope_verification = (
+            "matched" if scope_matches else
+            "mismatch" if response_scope_status == "declared" else
+            "unverified"
+        )
         rows, payload_path = _extract_game_rows(body)
         if payload_path is None:
             return SourceResult(
@@ -229,7 +270,11 @@ class RobloxChartAdapter:
         seen_ids: set[str] = set()
         invalid_rows = 0
         duplicate_ids = 0
-        for position, row in enumerate(rows):
+        # The Explore endpoint may ignore maxRows and return a larger chart payload.
+        # Never pass more than the configured limit into candidate normalization.
+        overflow_rows = max(0, len(rows) - page_size)
+        accepted_rows = rows[:page_size]
+        for position, row in enumerate(accepted_rows):
             if not isinstance(row, dict):
                 invalid_rows += 1
                 continue
@@ -248,7 +293,20 @@ class RobloxChartAdapter:
             raw_next_token = body.get("nextPageCursor")
         errors: list[dict] = []
         next_cursor = None
-        if raw_next_token is not None:
+        reported_next_token_present = isinstance(raw_next_token, str) and bool(raw_next_token)
+        if overflow_rows:
+            errors.append({
+                "code": "response_exceeds_max_rows",
+                "retryable": False,
+                "requested_max_rows": page_size,
+                "raw_rows": len(rows),
+                "accepted_rows": len(accepted_rows),
+                "overflow_rows": overflow_rows,
+            })
+            # A server token may start after the oversized response. Following it
+            # after truncating this page would silently skip the overflow rows.
+            next_cursor = None
+        elif raw_next_token is not None:
             if isinstance(raw_next_token, str) and raw_next_token and len(raw_next_token) <= MAX_PAGE_TOKEN_LENGTH and not any(ord(char) < 32 for char in raw_next_token):
                 next_cursor = raw_next_token
             elif raw_next_token not in ("", None):
@@ -258,7 +316,11 @@ class RobloxChartAdapter:
         if duplicate_ids:
             errors.append({"code": "duplicate_universe_ids_within_page", "retryable": False, "count": duplicate_ids})
 
-        page_complete = bool(rows) and invalid_rows == 0 and duplicate_ids == 0 and len(items) == len(rows)
+        page_complete = (
+            bool(rows) and overflow_rows == 0
+            and invalid_rows == 0 and duplicate_ids == 0
+            and len(items) == len(accepted_rows)
+        )
         pagination_complete = page_complete and next_cursor is None and not errors
 
         if not items:
@@ -281,10 +343,13 @@ class RobloxChartAdapter:
                 errors=errors or [{"code": "chart_returned_no_usable_games", "retryable": False}],
             )
 
-        status = "complete" if pagination_complete else "partial"
+        status = "complete" if pagination_complete and scope_verification == "matched" else "partial"
         for item in items:
-            item["country"] = country.lower()
-            item["device"] = device
+            item["country"] = effective_country
+            item["device"] = effective_device
+            item["requested_country"] = requested_country
+            item["requested_device"] = requested_device
+            item["scope_verification"] = scope_verification
         return SourceResult(
             self.source_id,
             status,
@@ -293,8 +358,12 @@ class RobloxChartAdapter:
                 **request.scope,
                 "url": url,
                 "sort_id": sort_id,
-                "country": country.lower(),
-                "device": device,
+                "country": effective_country,
+                "device": effective_device,
+                "requested_country": requested_country,
+                "requested_device": requested_device,
+                "response_scope_status": response_scope_status,
+                "scope_verification": scope_verification,
                 "max_rows": page_size,
                 "pagination_mode": "opaque_page_token",
             },
@@ -304,8 +373,17 @@ class RobloxChartAdapter:
             coverage={
                 "payload_path": payload_path,
                 "page_size": page_size,
+                "requested_max_rows": page_size,
                 "raw_rows": len(rows),
+                "accepted_rows": len(accepted_rows),
+                "overflow_rows": overflow_rows,
                 "parsed_items": len(items),
+                "reported_next_page_token_present": reported_next_token_present,
+                "requested_country": requested_country,
+                "requested_device": requested_device,
+                "effective_country": effective_country,
+                "effective_device": effective_device,
+                "scope_verification": scope_verification,
                 "invalid_rows": invalid_rows,
                 "duplicate_universe_ids": duplicate_ids,
                 "page_complete": page_complete,

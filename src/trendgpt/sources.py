@@ -61,6 +61,16 @@ class SourceAdapter:
         raise NotImplementedError
 
 
+
+ROBLOX_SOURCE_METADATA_FIELDS = (
+    "universe_id", "root_place_id", "player_count", "playerCount",
+    "total_up_votes", "total_down_votes", "is_sponsored",
+    "genre_l1", "genre_l2", "creator_name", "sort_id",
+    "country", "device", "requested_country", "requested_device",
+    "scope_verification", "source_rank", "signals", "list_type",
+)
+
+
 def merge_source_results(
     source_results: list[SourceResult],
     *,
@@ -148,6 +158,10 @@ def merge_source_results(
                 if raw.get(field_name) is not None:
                     source_record[field_name] = raw[field_name]
 
+            if result.source_id == "roblox":
+                for field_name in ROBLOX_SOURCE_METADATA_FIELDS:
+                    source_record[field_name] = raw.get(field_name)
+
             if identity in seen:
                 candidate = seen[identity]
                 if title not in candidate["raw_titles"]:
@@ -176,6 +190,8 @@ def merge_source_results(
                         "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
                     ) if raw.get(key) is not None
                 }
+                if result.source_id == "roblox":
+                    metadata.update({key: raw.get(key) for key in ROBLOX_SOURCE_METADATA_FIELDS})
                 if metadata and metadata not in candidate["source_metadata"]:
                     candidate["source_metadata"].append(metadata)
                 reason = raw.get("discovery_reason")
@@ -194,6 +210,8 @@ def merge_source_results(
                     "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
                 ) if raw.get(key) is not None
             }
+            if result.source_id == "roblox":
+                source_metadata.update({key: raw.get(key) for key in ROBLOX_SOURCE_METADATA_FIELDS})
             candidate = {
                 "candidate_id": candidate_id,
                 "entity_id": f"provisional:{candidate_id}",

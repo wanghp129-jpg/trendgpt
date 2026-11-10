@@ -7,7 +7,7 @@ description: Discover candidate games from bounded public source adapters, prese
 
 ## Status
 
-The Python source adapters and bounded multi-source collector are implemented in this repository. Steam has a VPS PASS_WITH_RISK pilot; Roblox dual-board code is fixture-tested and awaits its bounded VPS pilot; YouTube remains unverified. Do not enable a timer or production Skill until each source is separately verified.
+The Python source adapters and bounded multi-source collector are implemented in this repository. Steam has a VPS PASS_WITH_RISK pilot; Roblox dual-board code is fixture-tested and awaits a corrected bounded VPS pilot; YouTube remains unverified. The Roblox pilot now requests global scope (country=all/device=all), records requested and server-declared effective scope separately, caps oversized responses at maxRows, preserves explicit null metadata fields, and accepts timezone-offset plus signs in ledger run IDs. Do not enable a timer or production Skill until each source is separately verified.
 
 ## Required inputs
 
@@ -29,6 +29,12 @@ The command is opt-in and bounded by per-source page limits. It writes raw sourc
 ## Steam pilot
 
 For a small VPS validation, use config/source-plan.steam-validation.json and follow docs/STEAM_PILOT.md. The plan is explicitly US-English and bounded to two pages of 25 rows per Steam list. The internal Recent Releases alias is translated to Steam filter=newreleases; Popular New Releases uses popularnew. Do not treat this pilot as complete source coverage.
+
+## Roblox dual-board pilot
+
+For the controlled VPS validation, use config/source-plan.roblox-validation.json and follow docs/ROBLOX_PILOT.md. It reads the public Explore API for Up-and-Coming and Top Playing Now with country=all/device=all, 50 rows/page and at most two pages per board (four requests maximum). The endpoint is an observed anonymous web contract, not a stable Open Cloud SLA; no cookies, login, proxies or challenge bypasses are used.
+
+The adapter records requested country/device separately from server-declared effective country/device. A mismatch or missing response declaration is never silently replaced with the requested scope. If Roblox returns more than maxRows, only maxRows rows enter candidate normalization, overflow_rows is recorded, the page is partial, and the opaque token is not followed because it may skip unprocessed overflow rows. Every Roblox source record and source_metadata object keeps a fixed set of metadata keys, with missing values represented explicitly as null. The stable identity is universeId; rootPlaceId remains separate. Player count, votes, genre, creator and sponsored state are retained when supplied.
 
 ## First-seen ledger
 

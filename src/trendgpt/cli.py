@@ -208,6 +208,12 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
                     # rather than compounding a host-level throttle/challenge.
                     abort_remaining_sources = True
                 break
+            result_coverage = result.coverage if isinstance(result.coverage, dict) else {}
+            if result_coverage.get("overflow_rows", 0):
+                stop_reason = "server_exceeded_max_rows"
+                # Do not follow an opaque token after truncating an oversized page:
+                # the token may skip rows that were not admitted to this snapshot.
+                break
             if not result.next_cursor:
                 stop_reason = "source_reported_no_next_cursor"
                 break
@@ -334,7 +340,6 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             aggregate_status = "failed"
         else:
             aggregate_status = "complete" if pagination_complete else "partial"
-
         if duplicate_ids_across_pages:
             all_errors.append({
                 "code": "duplicate_platform_ids_across_pages",
@@ -344,7 +349,7 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
 
         last_page = pages[-1] if pages else None
         aggregate_next_cursor = (
-            None if pagination_complete or last_page is None
+            None if pagination_complete or last_page is None or stop_reason == "server_exceeded_max_rows"
             else last_page.next_cursor
         )
         aggregate_scope = {
@@ -355,10 +360,28 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
         }
         if pagination_modes:
             aggregate_scope["pagination_mode"] = sorted(pagination_modes)[0] if len(pagination_modes) == 1 else "mixed"
-        for scope_key in ("sort_id", "country", "device"):
+        for scope_key in ("sort_id",):
             values = [page.scope.get(scope_key) for page in pages]
             if values and all(value is not None for value in values) and len(set(values)) == 1:
                 aggregate_scope[scope_key] = values[0]
+        if source == "roblox":
+            # For Roblox, country/device are effective response scope, not the
+            # requested query values. Never copy the plan values into these fields.
+            aggregate_scope["requested_country"] = scope.get("country")
+            aggregate_scope["requested_device"] = scope.get("device")
+            for scope_key in ("country", "device"):
+                values = [page.scope.get(scope_key) for page in pages]
+                aggregate_scope[scope_key] = values[0] if values and len(set(values)) == 1 else None
+            verifications = [page.scope.get("scope_verification", "unverified") for page in pages]
+            aggregate_scope["scope_verification"] = (
+                verifications[0] if verifications and len(set(verifications)) == 1 else "mixed"
+            )
+            aggregate_scope["response_scope_status"] = (
+                "declared" if pages and all(page.scope.get("response_scope_status") == "declared" for page in pages)
+                else "unverified"
+            )
+            if aggregate_scope["scope_verification"] != "matched" and aggregate_status == "complete":
+                aggregate_status = "partial"
         page_filters = [
             page.scope.get("filter") or page.scope.get("steam_filter")
             for page in pages
@@ -379,6 +402,10 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
                 "list_type": page.scope.get("list_type"),
                 "country": page.scope.get("country"),
                 "device": page.scope.get("device"),
+                "requested_country": page.scope.get("requested_country"),
+                "requested_device": page.scope.get("requested_device"),
+                "response_scope_status": page.scope.get("response_scope_status"),
+                "scope_verification": page.scope.get("scope_verification"),
                 "coverage": page.coverage,
                 "filter": page.scope.get("filter") or page.scope.get("steam_filter"),
                 "filter_source": page.scope.get("filter_source") or (
@@ -429,6 +456,10 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "sort_id": aggregate_scope.get("sort_id"),
             "country": aggregate_scope.get("country"),
             "device": aggregate_scope.get("device"),
+            "requested_country": aggregate_scope.get("requested_country"),
+            "requested_device": aggregate_scope.get("requested_device"),
+            "response_scope_status": aggregate_scope.get("response_scope_status"),
+            "scope_verification": aggregate_scope.get("scope_verification"),
             "pagination_mode": aggregate_scope.get("pagination_mode"),
             "status": aggregate.status,
             "pages": len(pages),

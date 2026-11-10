@@ -179,6 +179,20 @@ class EntityFirstSeenLedgerTests(unittest.TestCase):
                 ledger.record_snapshot(snapshot)
             self.assertFalse(ledger.ledger_path.exists())
 
+    def test_run_id_accepts_timezone_offset_plus_sign(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run_id = "roblox-pilot-20261110T120000+0800"
+            snapshot = candidate_snapshot(
+                run_id, "2026-11-10", "2026-11-10T12:00:00+08:00",
+                platform_ids={"roblox": "987654"},
+            )
+            ledger = EntityFirstSeenLedger(Path(temp) / "self-v1")
+            first = ledger.record_snapshot(snapshot)
+            second = ledger.record_snapshot(snapshot)
+            self.assertEqual(first["status"], "recorded")
+            self.assertEqual(second["status"], "reused")
+            self.assertEqual(ledger.read()["entities"]["platform:roblox:987654"]["observation_count"], 1)
+
     def test_refuses_non_self_v1_root(self):
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaises(Exception):

@@ -71,6 +71,11 @@ class RobloxChartAdapterTests(unittest.TestCase):
         self.assertFalse(result.items[0]["is_sponsored"])
         self.assertEqual(result.items[0]["source_rank"], 1)
         self.assertEqual(result.scope["sort_id"], "up-and-coming")
+        self.assertEqual(result.scope["requested_country"], "us")
+        self.assertEqual(result.scope["requested_device"], "computer")
+        self.assertIsNone(result.scope["country"])
+        self.assertIsNone(result.scope["device"])
+        self.assertEqual(result.scope["scope_verification"], "unverified")
         self.assertEqual(result.coverage["pagination_mode"], "opaque_page_token")
         self.assertTrue(result.evidence_refs)
         self.assertTrue(result.evidence_refs[0]["sha256"])
@@ -84,7 +89,7 @@ class RobloxChartAdapterTests(unittest.TestCase):
         self.assertNotIn("pageToken", query)
 
     def test_top_playing_now_uses_page_token_and_preserves_sponsored_flag(self):
-        body = {"games": [_game(501, "Sponsored Experience", sponsored=True)]}
+        body = {"games": [_game(501, "Sponsored Experience", sponsored=True)], "country": "us", "device": "computer"}
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "validation" / "self-v1"
             with patch("trendgpt.adapters.roblox.get_public_text", return_value=json.dumps(body)) as fetch:
@@ -98,6 +103,44 @@ class RobloxChartAdapterTests(unittest.TestCase):
         self.assertTrue(result.coverage["pagination_complete"])
         self.assertTrue(result.items[0]["is_sponsored"])
         self.assertEqual(result.items[0]["discovery_reason"], "Appeared in Roblox Top Playing Now")
+
+    def test_server_declared_global_scope_is_not_mislabeled_as_requested_us_computer(self):
+        body = {
+            "games": [_game(777, "Global Chart Game")],
+            "country": "all",
+            "device": "all",
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "validation" / "self-v1"
+            with patch("trendgpt.adapters.roblox.get_public_text", return_value=json.dumps(body)):
+                result = RobloxChartAdapter().fetch(_request(root))
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(result.scope["requested_country"], "us")
+        self.assertEqual(result.scope["requested_device"], "computer")
+        self.assertEqual(result.scope["country"], "all")
+        self.assertEqual(result.scope["device"], "all")
+        self.assertEqual(result.scope["scope_verification"], "mismatch")
+        self.assertEqual(result.items[0]["country"], "all")
+        self.assertEqual(result.items[0]["device"], "all")
+
+    def test_server_overflow_is_capped_and_not_followed(self):
+        body = {
+            "games": [_game(1000 + i, f"Game {i}") for i in range(96)],
+            "country": "all",
+            "device": "all",
+            "nextPageToken": "opaque-after-overflow",
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "validation" / "self-v1"
+            with patch("trendgpt.adapters.roblox.get_public_text", return_value=json.dumps(body)):
+                result = RobloxChartAdapter().fetch(_request(root, page_size=50, scope={"country": "all", "device": "all"}))
+        self.assertEqual(len(result.items), 50)
+        self.assertEqual(result.coverage["raw_rows"], 96)
+        self.assertEqual(result.coverage["accepted_rows"], 50)
+        self.assertEqual(result.coverage["overflow_rows"], 46)
+        self.assertIsNone(result.next_cursor)
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(result.errors[0]["code"], "response_exceeds_max_rows")
 
     def test_same_run_uses_stable_session_id_across_pages(self):
         body = {"games": [_game(101, "Game")], "nextPageToken": "next"}

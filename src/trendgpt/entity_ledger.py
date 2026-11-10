@@ -18,7 +18,7 @@ from typing import Any
 from .contracts import ContractError, load_json, validate_candidate_snapshot
 from .storage import StorageError, atomic_write_json, reject_symlink_components
 
-RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+RUN_ID_RE = re.compile(r"^[-A-Za-z0-9._+]{1,128}$")
 
 
 class EntityLedgerConflict(StorageError):

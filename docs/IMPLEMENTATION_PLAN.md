@@ -88,6 +88,18 @@ The ledger does not infer cross-platform equivalence. A record with zero or mult
 
 See docs/STEAM_PILOT.md. The checked-in pilot plan is a controlled validation scope, not a claim of complete Steam coverage.
 
+## Stage 2.2 — Roblox dual-board remediation after VPS FAIL
+
+- [x] Change the controlled pilot to global scope (country=all/device=all), matching the server-declared effective scope observed in the previous VPS run.
+- [x] Preserve requested scope separately from response-declared effective scope; a mismatch or missing declaration is explicit and downgrades source status rather than being mislabeled.
+- [x] Enforce maxRows at candidate admission. When the endpoint returns more than requested, preserve the full raw JSON evidence, admit only the first maxRows, record overflow_rows, mark partial and do not follow a token that may skip unprocessed rows.
+- [x] Preserve a fixed Roblox source-record and source_metadata field set, including explicit null values for missing player/vote/genre/creator/sponsored fields.
+- [x] Accept safe timezone-offset plus signs in first-seen ledger run IDs such as +0800.
+- [x] Add offline tests for effective-scope mismatch, oversized responses, null metadata preservation and timezone-offset run IDs.
+- [ ] Run the corrected bounded Roblox VPS pilot; verify both boards, actual effective scope, maxRows enforcement, raw evidence, candidate contract and first-seen ledger.
+
+The corrected pilot remains global unless a future endpoint response proves a narrower effective scope. It is still a selected-chart sample, not a crawl of the Roblox catalog.
+
 ## Stage 2 — source discovery
 
 1. Complete the bounded VPS pilot for Roblox Up-and-Coming and Top Playing Now; verify anonymous access, stable universe IDs, root place IDs, chart metadata, opaque pagination and evidence hashes.

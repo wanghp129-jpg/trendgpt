@@ -5,8 +5,8 @@
       "source": "roblox",
       "scope": {
         "list_type": "up-and-coming",
-        "country": "us",
-        "device": "computer"
+        "country": "all",
+        "device": "all"
       },
       "page_limit": 50,
       "max_pages": 2
@@ -15,8 +15,8 @@
       "source": "roblox",
       "scope": {
         "list_type": "top-playing-now",
-        "country": "us",
-        "device": "computer"
+        "country": "all",
+        "device": "all"
       },
       "page_limit": 50,
       "max_pages": 2

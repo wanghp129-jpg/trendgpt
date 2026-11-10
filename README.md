@@ -59,7 +59,7 @@ The command never invokes the API fetcher. It remains benchmark_not_ready until 
 
 ## Roblox pilot
 
-See docs/ROBLOX_PILOT.md and use config/source-plan.roblox-validation.json for the bounded US/computer Up-and-Coming and Top Playing Now VPS pilot (50 rows/page, up to two pages per board, four requests maximum). It uses anonymous Roblox Explore API GET requests and never uses a login, cookie or proxy.
+See docs/ROBLOX_PILOT.md and use config/source-plan.roblox-validation.json for the bounded global Up-and-Coming and Top Playing Now VPS pilot (country=all, device=all, 50 rows/page, up to two pages per board, four requests maximum). It uses anonymous Roblox Explore API GET requests and never uses a login, cookie or proxy. Requested and server-declared effective scope are kept separate; oversized responses are capped at maxRows and marked partial.
 
 ## Steam pilot
 

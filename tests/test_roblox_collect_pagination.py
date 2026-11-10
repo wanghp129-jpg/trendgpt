@@ -33,6 +33,8 @@ class _PagedRobloxAdapter:
                 "sort_id": list_type,
                 "url": f"https://apis.roblox.com/explore-api/v1/get-sort-content?sortId={list_type}",
                 "pagination_mode": "opaque_page_token",
+                "response_scope_status": "declared",
+                "scope_verification": "matched",
             },
             items=[{
                 **item,
@@ -40,6 +42,9 @@ class _PagedRobloxAdapter:
                 "sort_id": list_type,
                 "country": request.scope["country"],
                 "device": request.scope["device"],
+                "requested_country": request.scope["country"],
+                "requested_device": request.scope["device"],
+                "scope_verification": "matched",
                 "discovery_reason": (
                     "Appeared in Roblox Up-and-Coming"
                     if list_type == "up-and-coming"
@@ -66,13 +71,16 @@ def _game(universe_id, name, *, local_rank=1, players=100):
         "list_type": "up-and-coming",
         "sort_id": "up-and-coming",
         "source_rank": local_rank,
-        "player_count": players,
-        "total_up_votes": 90,
-        "total_down_votes": 10,
-        "is_sponsored": False,
-        "genre_l1": "Simulation",
+        "player_count": None if name == "Up Only" else players,
+        "playerCount": None if name == "Up Only" else players,
+        "total_up_votes": None if name == "Up Only" else 90,
+        "total_down_votes": None if name == "Up Only" else 10,
+        "is_sponsored": None if name == "Up Only" else False,
+        "genre_l1": None if name == "Up Only" else "Simulation",
+        "genre_l2": None if name == "Up Only" else "Tycoon",
+        "creator_name": None if name == "Up Only" else "Studio",
+        "signals": [] if name == "Up Only" else [{"type": "roblox_concurrent_players", "value": players}],
         "discovery_reason": "Appeared in Roblox Up-and-Coming",
-        "signals": [{"type": "roblox_concurrent_players", "value": players}],
     }
 
 
@@ -203,6 +211,14 @@ class RobloxCollectPaginationTests(unittest.TestCase):
             self.assertEqual(up_page_two["sources"][0]["position"], 3)
             self.assertEqual(up_page_two["first_self_discovered_at"], "2026-11-10T00:02:00+00:00")
             self.assertEqual(up_page_two["platform_ids"], {"roblox": "103"})
+            sparse = next(item for item in snapshot["candidates"] if item["canonical_name"] == "Up Only")
+            sparse_meta = sparse["source_metadata"][0]
+            sparse_source = sparse["sources"][0]
+            for key in ("player_count", "playerCount", "total_up_votes", "total_down_votes", "is_sponsored", "genre_l1", "genre_l2", "creator_name"):
+                self.assertIn(key, sparse_meta)
+                self.assertIsNone(sparse_meta[key])
+                self.assertIn(key, sparse_source)
+                self.assertIsNone(sparse_source[key])
 
             ledger = EntityFirstSeenLedger(root)
             first_ledger_run = ledger.record_snapshot(snapshot)
@@ -211,6 +227,43 @@ class RobloxCollectPaginationTests(unittest.TestCase):
             second_ledger_run = ledger.record_snapshot(snapshot)
             self.assertEqual(second_ledger_run["status"], "reused")
             self.assertEqual(ledger.read()["entities"]["platform:roblox:101"]["observation_count"], 1)
+
+    def test_oversized_roblox_response_is_partial_and_does_not_follow_token(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            root = base / "output" / "self-v1"
+            oversized_items = [_game(1000 + i, f"Overflow Game {i}") for i in range(50)]
+            adapter = _PagedRobloxAdapter({
+                "up-and-coming": {
+                    "first": {
+                        "status": "partial",
+                        "fetched_at": "2026-11-10T00:01:00+00:00",
+                        "items": oversized_items,
+                        "next_cursor": "token-after-96-rows",
+                        "coverage": {
+                            "raw_rows": 96, "accepted_rows": 50, "overflow_rows": 46,
+                            "parsed_items": 50, "page_complete": False,
+                            "pagination_mode": "opaque_page_token", "pagination_complete": False,
+                        },
+                        "errors": [{"code": "response_exceeds_max_rows", "retryable": False}],
+                    },
+                },
+                "top-playing-now": {
+                    "first": _page(
+                        [_game(2001, "Top Board Game")],
+                        fetched_at="2026-11-10T00:02:00+00:00",
+                    ),
+                },
+            })
+            with patch("trendgpt.cli._make_adapter", return_value=adapter):
+                result = _collect(_args(root, _plan(base)))
+        self.assertEqual(adapter.calls, [("up-and-coming", None), ("top-playing-now", None)])
+        up_source = next(item for item in result["source_summary"] if item["list_type"] == "up-and-coming")
+        self.assertEqual(up_source["status"], "partial")
+        self.assertEqual(up_source["stop_reason"], "server_exceeded_max_rows")
+        self.assertEqual(up_source["items"], 50)
+        self.assertIsNone(up_source["next_cursor"])
+        self.assertEqual(result["candidate_count"], 51)
 
     def test_page_cap_keeps_opaque_pagination_partial_and_returns_token(self):
         with tempfile.TemporaryDirectory() as temp:

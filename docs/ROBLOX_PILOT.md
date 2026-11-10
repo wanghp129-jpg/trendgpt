@@ -22,7 +22,7 @@ with the corresponding public sort IDs:
 - up-and-coming
 - top-playing-now
 
-The request includes sessionId, sortId, device, country, maxRows and, when continuing, pageToken. sessionId is a generated public correlation ID derived from the run identifier; it is not a Roblox login session.
+The request includes sessionId, sortId, device=all, country=all, maxRows and, when continuing, pageToken. The prior VPS response explicitly declared all regions and devices despite a global/all devices request. The pilot therefore requests the same global scope and records requested scope separately from server-declared effective scope. A query parameter alone is never treated as proof that the service applied it. sessionId is a generated public correlation ID derived from the run identifier; it is not a Roblox login session.
 
 The endpoint is an observed Roblox web contract, not a stable Open Cloud API/SLA. A schema change, access restriction or rate limit must produce a visible blocked/failed/partial result. Do not use proxies, cookies or challenge bypasses as fallbacks.
 
@@ -34,9 +34,9 @@ The chart response can expose playerCount, totalUpVotes, totalDownVotes, genre a
 
 The checked-in plan is config/source-plan.roblox-validation.json:
 
-- Up-and-Coming: US / computer, 50 rows per page, maximum 2 pages.
-- Top Playing Now: US / computer, 50 rows per page, maximum 2 pages.
-- Maximum public API requests: 4 total for one run.
+- Up-and-Coming: country=all / device=all, 50 rows per page, maximum 2 pages.
+- Top Playing Now: country=all / device=all, 50 rows per page, maximum 2 pages.
+- Maximum public API requests: 4 total for one run. If the endpoint returns more rows than maxRows, only the first maxRows are admitted; the response is marked partial and its opaque next token is not followed because it may skip the unprocessed overflow rows.
 - Pagination uses the opaque nextPageToken returned by Roblox.
 - No detail, votes, thumbnails or secondary metadata endpoint is called in this pilot.
 
@@ -59,7 +59,8 @@ Validate the candidate snapshot with the existing candidate contract, then run r
 For each board and page, inspect:
 
 - request URL and sortId;
-- country and device;
+- requested country/device and server-declared effective country/device;
+- scope_verification (matched, mismatch or unverified);
 - maxRows and pageToken;
 - HTTP result;
 - raw JSON evidence and SHA-256;
@@ -82,7 +83,7 @@ PASS:
 - parsed rows have a numeric universeId and non-empty name;
 - universeId is retained as the Roblox platform ID;
 - rootPlaceId is kept separately and used for the Roblox game URL when present;
-- request country/device/sort scope is preserved;
+- requested and server-declared effective country/device/sort scope are preserved separately;
 - opaque page tokens progress without a loop;
 - raw JSON evidence exists and SHA-256 matches its reference;
 - candidate JSON passes the existing candidate contract;
@@ -92,7 +93,8 @@ PASS:
 PASS_WITH_RISK:
 - one board is available and yields verifiable candidates while the other is blocked/empty/changed;
 - the endpoint omits nextPageToken or exposes a bounded chart sample whose wider catalog coverage cannot be proven;
-- a page cap is reached while another page token remains. The source must remain partial and the next cursor must be reported.
+- a page cap is reached while another page token remains. The source must remain partial and the next cursor must be reported;
+- a server response exceeds maxRows. The adapter admits no more than maxRows, marks partial, records overflow_rows and does not follow an opaque token that may skip the overflow.
 
 FAIL:
 - universeId and rootPlaceId are confused;
