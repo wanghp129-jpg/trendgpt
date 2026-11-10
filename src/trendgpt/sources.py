@@ -96,6 +96,9 @@ def merge_source_results(
         })
         for position, raw in enumerate(result.items):
             raw_records += 1
+            observed_at = raw.get("source_fetched_at") or raw.get("fetched_at") or result.fetched_at
+            if not isinstance(observed_at, str) or not observed_at.strip():
+                observed_at = result.fetched_at
             title = raw.get("candidate_name") or raw.get("name") or raw.get("keyword")
             source_record_id = raw.get("source_record_id") or raw.get("platform_id") or raw.get("id")
             platform = raw.get("platform") or result.source_id
@@ -104,7 +107,7 @@ def merge_source_results(
                 unparsed_items.append({
                     "source_id": result.source_id, "position": position,
                     "reason": "source record has no resolved game identity",
-                    "raw_record": raw, "fetched_at": result.fetched_at,
+                    "raw_record": raw, "fetched_at": observed_at,
                 })
                 continue
             parsed_records += 1
@@ -117,16 +120,20 @@ def merge_source_results(
                 "page_index": raw.get("source_page_index"),
                 "page_cursor": raw.get("source_page_cursor"),
                 "page_position": raw.get("source_page_position", position),
-                "fetched_at": result.fetched_at,
+                "fetched_at": observed_at,
+                "source_fetched_at": observed_at,
+                "source_run_fetched_at": result.fetched_at,
                 "url": raw.get("url"),
                 "list_type": raw.get("list_type"),
-                "steam_filter": raw.get("steam_filter"),
+                "filter": raw.get("filter") or raw.get("source_filter") or raw.get("steam_filter"),
+                "filter_source": raw.get("filter_source"),
+                "steam_filter": raw.get("steam_filter") or raw.get("filter") or raw.get("source_filter"),
                 "published_at": raw.get("published_at"),
             }
             for field_name in (
                 "release_date_text", "release_date_iso", "release_date_precision",
                 "price_text", "price_final_text", "price_original_text", "price_original",
-                "price_final_minor_units", "price_currency_id", "review_summary",
+                "price_final_minor_units", "price_currency_id", "filter", "source_filter", "filter_source", "review_summary", "review_summary_source",
                 "review_tooltip_text", "review_positive_pct", "review_count",
                 "review_rating_class", "discount_text", "discount_pct",
                 "discount_pct_numeric", "steam_filter", "result_kind",
@@ -140,14 +147,22 @@ def merge_source_results(
                 if title not in candidate["raw_titles"]:
                     candidate["raw_titles"].append(title)
                 candidate["sources"].append(source_record)
+                observation_event = {
+                    "origin": "self_discovered",
+                    "source_id": result.source_id,
+                    "observed_at": observed_at,
+                    "run_id": run_id,
+                }
+                if observation_event not in candidate["origin_events"]:
+                    candidate["origin_events"].append(observation_event)
                 for evidence in result.evidence_refs:
                     if evidence not in candidate["raw_evidence_refs"]:
                         candidate["raw_evidence_refs"].append(evidence)
                 metadata = {
                     key: raw.get(key) for key in (
-                        "list_type", "steam_filter", "release_date_text", "release_date_iso",
+                        "list_type", "filter", "source_filter", "filter_source", "steam_filter", "release_date_text", "release_date_iso",
                         "price_text", "price_final_text", "price_original_text", "price_original",
-                        "price_final_minor_units", "price_currency_id", "review_summary",
+                        "price_final_minor_units", "price_currency_id", "review_summary", "review_summary_source",
                         "review_tooltip_text", "review_positive_pct", "review_count",
                         "review_rating_class", "discount_text", "discount_pct",
                         "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
@@ -161,7 +176,7 @@ def merge_source_results(
                 continue
             source_metadata = {
                 key: raw.get(key) for key in (
-                    "list_type", "steam_filter", "release_date_text", "release_date_iso",
+                    "list_type", "filter", "source_filter", "steam_filter", "release_date_text", "release_date_iso",
                     "price_text", "price_final_text", "price_original_text", "price_original",
                     "price_final_minor_units", "price_currency_id", "review_summary",
                     "review_tooltip_text", "review_positive_pct", "review_count",
@@ -181,10 +196,10 @@ def merge_source_results(
                 "discovery_origin": "self_discovered",
                 "origin_events": [{
                     "origin": "self_discovered", "source_id": result.source_id,
-                    "observed_at": result.fetched_at, "run_id": run_id,
+                    "observed_at": observed_at, "run_id": run_id,
                 }],
-                "first_discovered_at": result.fetched_at,
-                "first_self_discovered_at": result.fetched_at,
+                "first_discovered_at": observed_at,
+                "first_self_discovered_at": observed_at,
                 "independent_eligibility": {
                     "eligible": None, "reason": "API exposure chronology has not been adjudicated",
                 },

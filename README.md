@@ -16,7 +16,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Strict JSON loading and first-pass contract validators.
 - Conservative Unicode/name normalization and exact/known-alias matching.
 - Provider-neutral source result contracts and candidate merging with unresolved-record preservation.
-- Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. The Steam adapter maps the Recent Releases alias to the public newreleases filter, reconciles AppIDs, the Games category filter and declared page totals, advances by observed raw rows, and extracts price/review/discount metadata when present; raw pages are hash-bound under self-v1.
+- Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. The Steam adapter maps the Recent Releases alias to the public newreleases filter, reconciles AppIDs, the Games category filter and declared page totals, advances by observed raw rows, and extracts price/review/discount metadata when present; preserves actual request filter values and per-page observation timestamps through candidate aggregation; raw pages are hash-bound under self-v1.
 - A multi-source collect command with explicit network opt-in, bounded pages, isolated candidate snapshots and per-page artifacts.
 - Browser instance registry for existing ports and planned 9226/9227 roles.
 - Cross-process ChatGPT flock lease wrapper and persistent self-v1 queue with idempotency, single-task claims, SHA-256 output checks, and uncertain-run review.

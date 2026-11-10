@@ -93,6 +93,45 @@ class SteamParserTests(unittest.TestCase):
         self.assertEqual(item["price_currency_id"], "1")
         self.assertEqual(item["discount_pct_numeric"], 20)
         self.assertEqual(item["review_summary"], "Very Positive")
+        self.assertEqual(item["review_summary_source"], "tooltip_label")
+        self.assertEqual(item["review_rating_class"], "positive")
+        self.assertEqual(item["review_positive_pct"], 94.0)
+        self.assertEqual(item["review_count"], 427532)
+
+    def test_visible_review_label_is_used_when_tooltip_is_absent(self):
+        html = """
+        <div id="search_results" data-total-count="1">
+          <a class="search_result_row" data-ds-appid="54320" href="/app/54320/game/">
+            <span class="title">Visible Rating Game</span>
+            <span class="search_review_summary positive">Mostly Positive</span>
+          </a>
+        </div>
+        """
+        parser = _SteamResults()
+        parser.feed(html)
+        parser.close()
+        item = parser.items[0]
+        self.assertEqual(item["review_summary"], "Mostly Positive")
+        self.assertEqual(item["review_summary_source"], "visible_text")
+        self.assertEqual(item["review_rating_class"], "positive")
+
+    def test_exact_rating_label_comes_from_tooltip_not_css_class(self):
+        html = """
+        <div id="search_results" data-total-count="1">
+          <a class="search_result_row" data-ds-appid="54321" href="/app/54321/game/">
+            <span class="title">Tooltip Rating Game</span>
+            <span class="search_review_summary positive"
+              data-tooltip-html="Very Positive&lt;br&gt;94% of the 427,532 user reviews for this game are positive."></span>
+          </a>
+        </div>
+        """
+        parser = _SteamResults()
+        parser.feed(html)
+        parser.close()
+        item = parser.items[0]
+        self.assertEqual(item["review_summary"], "Very Positive")
+        self.assertEqual(item["review_summary_source"], "tooltip_label")
+        self.assertEqual(item["review_rating_class"], "positive")
         self.assertEqual(item["review_positive_pct"], 94.0)
         self.assertEqual(item["review_count"], 427532)
 
@@ -166,6 +205,10 @@ class SteamAdapterTests(unittest.TestCase):
             self.assertFalse(result.coverage["pagination_complete"])
             self.assertEqual(len(result.items), 2)
             self.assertEqual(result.scope["steam_filter"], "newreleases")
+            self.assertEqual(result.scope["filter"], "newreleases")
+            self.assertEqual(result.scope["filter_source"], "request_query_parameter")
+            self.assertEqual(result.items[0]["filter"], "newreleases")
+            self.assertEqual(result.items[0]["filter_source"], "request_query_parameter")
             self.assertTrue(Path(result.evidence_refs[0]["path"]).is_file())
 
             query = parse_qs(urlsplit(fetch.call_args.args[0]).query)

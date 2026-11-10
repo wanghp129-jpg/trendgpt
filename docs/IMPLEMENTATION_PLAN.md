@@ -74,7 +74,9 @@ The ledger does not infer cross-platform equivalence. A record with zero or mult
 - [x] Extract and reconcile numeric AppIDs from the app URL and data-ds-appid when present.
 - [x] Map the Recent Releases source-plan alias to Steam's actual public filter value newreleases; keep Popular New Releases as popularnew.
 - [x] Apply Steam's Games category filter (category1=998); reject package/bundle paths and AppID mismatches.
-- [x] Preserve release-date text, final/original price, discount, review tooltip/class/count/positive percentage, list type, source rank, page cursor and hash-bound raw HTML evidence when present.
+- [x] Preserve release-date text, final/original price, discount, exact human-readable review label, review tooltip/class/count/positive percentage, list type, source rank, page cursor and hash-bound raw HTML evidence when present.
+- [x] Preserve the actual Steam filter value in page response scope, aggregate source scope, source summaries and candidate source metadata, explicitly labelling it as the request query parameter rather than a provider echo.
+- [x] Preserve each page's independent fetch timestamp through page aggregation, per-source records, origin events and first-self-discovered timestamps.
 - [x] Reconcile raw result-row count with data-total-count; use visible pagination text as a fallback when the data attribute is absent.
 - [x] Advance the next cursor by observed raw result rows, not requested page size or accepted AppID count, so Steam returning 25 rows for count=10 does not stop pagination.
 - [x] Keep completeness unknown/partial when the source total is absent, raw rows mismatch, duplicate IDs occur, or the bounded page cap is reached.

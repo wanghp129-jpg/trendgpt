@@ -16,7 +16,10 @@ The checked-in plan is config/source-plan.steam-validation.json:
 - Maximum public page requests: 4 total for one run.
 - Steam's Games category filter (category1=998) is added by the adapter.
 - The adapter advances by the number of raw Steam result rows actually returned, not by the requested count or only by successfully parsed AppIDs.
+- The actual Steam filter value is retained as `filter` and `steam_filter` in each page response, aggregate source scope, source summary and candidate source records. `filter_source=request_query_parameter` explicitly identifies this as the query parameter sent by the collector, not a claim that Steam echoed or independently confirmed it.
 - Price, original price, discount and review metadata are extracted from Steam's discount blocks and review tooltip attributes when present; missing values remain null.
+- Exact review labels such as `Very Positive` are taken from visible review text or the tooltip label before the percentage. CSS classes such as `positive` are retained separately as styling classes, never used as a replacement rating label.
+- Each page's own fetch timestamp is attached to its rows and preserved through aggregation into candidate source records and first-discovery timestamps.
 - No Steam login or account cookie is required or requested.
 
 The US/English values are an explicit pilot scope, not a claim that this is the only relevant market. Preserve them in every source record so later comparisons do not mix regional scopes.
@@ -88,7 +91,9 @@ PASS:
 - candidate JSON passes the existing candidate contract;
 - raw HTML evidence exists and its SHA-256 matches its reference;
 - page starts/cursors progress without a loop;
-- source and market scope are preserved;
+- source and market scope are preserved, including the actual `filter` value in response scope;
+- page-specific `fetched_at` values survive aggregation and the second page does not inherit the first page's timestamp;
+- exact human-readable review labels are retained separately from CSS rating classes;
 - first-seen ledger records stable Steam AppIDs and does not alter the source candidate file;
 - no API, paid service, browser, domain, Feishu or website-dispatch action occurs.
 

@@ -239,12 +239,19 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
 
             all_pages_complete = all_pages_complete and coverage.get("page_complete") is True
             for position, item in enumerate(page.items):
+                page_filter = page.scope.get("filter") or page.scope.get("steam_filter")
                 enriched = {
                     **item,
                     "source_page_index": page_index,
                     "source_page_cursor": page.cursor,
                     "source_page_position": position,
+                    "source_fetched_at": page.fetched_at,
                 }
+                if isinstance(page_filter, str) and page_filter:
+                    enriched["filter"] = page_filter
+                    enriched["steam_filter"] = page_filter
+                    enriched["source_filter"] = page_filter
+                    enriched["filter_source"] = "request_query_parameter"
                 if isinstance(raw_start, int) and not isinstance(raw_start, bool):
                     enriched["source_rank"] = raw_start + position + 1
                 platform_id = enriched.get("platform_id") or enriched.get("source_record_id")
@@ -311,6 +318,27 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "page_limit": page_limit,
             "max_pages": max_pages,
         }
+        page_filters = [
+            page.scope.get("filter") or page.scope.get("steam_filter")
+            for page in pages
+        ]
+        if page_filters and all(isinstance(value, str) and value for value in page_filters) and len(set(page_filters)) == 1:
+            aggregate_scope["filter"] = page_filters[0]
+            aggregate_scope["steam_filter"] = page_filters[0]
+            aggregate_scope["filter_source"] = "request_query_parameter"
+        page_fetches = [
+            {
+                "page_index": index,
+                "cursor": page.cursor,
+                "fetched_at": page.fetched_at,
+                "url": page.scope.get("url"),
+                "filter": page.scope.get("filter") or page.scope.get("steam_filter"),
+                "filter_source": page.scope.get("filter_source"),
+                "raw_rows": page.coverage.get("raw_rows") if isinstance(page.coverage, dict) else None,
+                "parsed_items": page.coverage.get("parsed_items", len(page.items)) if isinstance(page.coverage, dict) else len(page.items),
+            }
+            for index, page in enumerate(pages)
+        ]
         aggregate_coverage = {
             "pages_fetched": len(pages),
             "page_starts": page_starts,
@@ -322,6 +350,7 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "all_pages_complete": all_pages_complete,
             "pagination_complete": pagination_complete,
             "stop_reason": stop_reason,
+            "page_fetches": page_fetches,
         }
         aggregate = SourceResult(
             source_id=source,
@@ -339,6 +368,9 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
         source_summary.append({
             "source": source,
             "source_plan_index": source_index,
+            "filter": aggregate_scope.get("filter"),
+            "steam_filter": aggregate_scope.get("steam_filter"),
+            "filter_source": aggregate_scope.get("filter_source"),
             "status": aggregate.status,
             "pages": len(pages),
             "items": len(all_items),
@@ -348,6 +380,7 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "next_cursor": aggregate_next_cursor,
             "pagination_complete": pagination_complete,
             "stop_reason": stop_reason,
+            "page_fetches": page_fetches,
             "errors": all_errors,
             "evidence_refs": all_evidence_refs,
         })

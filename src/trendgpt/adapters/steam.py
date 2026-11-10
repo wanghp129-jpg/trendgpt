@@ -210,13 +210,23 @@ class _SteamResults(HTMLParser):
         self._seen_app_ids.add(app_id)
 
         tooltip = _plain_text(item.get("review_tooltip_html", ""))
-        review_summary = item.get("review_summary_text")
-        if not isinstance(review_summary, str) or not review_summary.strip():
-            review_summary = item.get("review_rating_class")
-        if (not isinstance(review_summary, str) or not review_summary.strip()) and tooltip:
-            review_summary = re.split(r"\d+(?:[.,]\d+)?\s*%", tooltip, maxsplit=1)[0].strip()
-        if isinstance(review_summary, str) and review_summary.strip():
-            item["review_summary"] = review_summary.strip()
+        # The tooltip contains the human-readable Steam rating label (for
+        # example, "Very Positive"). CSS classes such as "positive" are only
+        # broad styling buckets and must never replace the exact label.
+        visible_review_text = item.get("review_summary_text")
+        tooltip_label = ""
+        if tooltip:
+            tooltip_label = re.split(
+                r"\d+(?:[.,]\d+)?\s*%", tooltip, maxsplit=1
+            )[0].strip(" \t\r\n-:;,.")
+        # Prefer the tooltip's full label when available; visible text is the
+        # fallback. Never substitute the broad CSS class (e.g. "positive").
+        if tooltip_label:
+            item["review_summary"] = tooltip_label
+            item["review_summary_source"] = "tooltip_label"
+        elif isinstance(visible_review_text, str) and visible_review_text.strip():
+            item["review_summary"] = visible_review_text.strip()
+            item["review_summary_source"] = "visible_text"
 
         if tooltip:
             item["review_tooltip_text"] = tooltip
@@ -308,12 +318,20 @@ class SteamSearchAdapter:
         if language:
             query["l"] = language.lower()
         url = f"{STEAM_BASE}/search/?{urlencode(query)}"
+        response_scope = {
+            **request.scope,
+            "url": url,
+            "list_type": list_type,
+            "filter": steam_filter,
+            "steam_filter": steam_filter,
+            "filter_source": "request_query_parameter",
+        }
 
         try:
             html_text = get_public_text(url, max_bytes=5_000_000)
         except SourceFetchError as exc:
             return SourceResult(
-                self.source_id, "failed", request.fetched_at, request.scope,
+                self.source_id, "failed", request.fetched_at, response_scope,
                 errors=[{"code": exc.code, "retryable": exc.retryable}],
             )
 
@@ -328,7 +346,7 @@ class SteamSearchAdapter:
             )
         except StorageError:
             return SourceResult(
-                self.source_id, "failed", request.fetched_at, request.scope,
+                self.source_id, "failed", request.fetched_at, response_scope,
                 errors=[{"code": "evidence_write_failed", "retryable": False}],
             )
 
@@ -338,8 +356,8 @@ class SteamSearchAdapter:
             parser.close()
         except Exception:
             return SourceResult(
-                self.source_id, "blocked", request.fetched_at, request.scope,
-                coverage={"url": url, "page_start": start},
+                self.source_id, "blocked", request.fetched_at, response_scope,
+                coverage={"url": url, "page_start": start, "filter": steam_filter},
                 evidence_refs=[raw_ref],
                 errors=[{"code": "html_parse_error", "retryable": False}],
             )
@@ -400,7 +418,7 @@ class SteamSearchAdapter:
                     self.source_id,
                     "complete",
                     request.fetched_at,
-                    {**request.scope, "url": url, "list_type": list_type, "steam_filter": steam_filter},
+                    response_scope,
                     items=[],
                     cursor=str(start),
                     next_cursor=None,
@@ -413,17 +431,20 @@ class SteamSearchAdapter:
                         "parsed_items": 0,
                         "page_complete": True,
                         "pagination_complete": True,
+                        "filter": steam_filter,
                         "steam_filter": steam_filter,
+                        "filter_source": "request_query_parameter",
                     },
                     evidence_refs=[raw_ref],
                     errors=[],
                 )
             return SourceResult(
                 self.source_id, "blocked", request.fetched_at,
-                {**request.scope, "url": url, "list_type": list_type, "steam_filter": steam_filter},
+                response_scope,
                 coverage={
                     "page_start": start,
                     "page_size": page_size,
+                    "filter": steam_filter,
                     "total_results": total,
                     "raw_rows": parser.row_count,
                     "parsed_items": 0,
@@ -438,12 +459,14 @@ class SteamSearchAdapter:
             self.source_id,
             status,
             request.fetched_at,
-            {**request.scope, "url": url, "list_type": list_type, "steam_filter": steam_filter},
+            response_scope,
             items=[
                 {
                     **item,
                     "list_type": list_type,
+                    "filter": steam_filter,
                     "steam_filter": steam_filter,
+                    "filter_source": "request_query_parameter",
                     "discovery_reason": (
                         "Appeared in Steam Recent Releases"
                         if list_type == "recentreleases"
@@ -469,13 +492,19 @@ class SteamSearchAdapter:
                 "excluded_non_app_results": parser.excluded_non_app_results,
                 "invalid_rows": parser.invalid_rows,
                 "duplicate_app_ids": parser.duplicate_app_ids,
+                "filter": steam_filter,
                 "steam_filter": steam_filter,
+                "filter_source": "request_query_parameter",
                 "category_filter": "games (category1=998)",
                 "country_code": country_code.lower() if country_code else None,
                 "language": language.lower() if language else None,
                 "metadata_counts": {
                     "price": sum(bool(item.get("price_text")) for item in items),
                     "review": sum(bool(item.get("review_summary")) for item in items),
+                    "review_exact_label": sum(
+                        bool(item.get("review_summary") and item.get("review_summary_source") in {"visible_text", "tooltip_label"})
+                        for item in items
+                    ),
                     "discount": sum(bool(item.get("discount_pct")) for item in items),
                 },
                 "note": (
