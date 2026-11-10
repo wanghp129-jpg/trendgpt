@@ -12,6 +12,7 @@ from trendgpt.adapters.youtube_search import (
     YouTubeSearchAdapter,
 )
 from trendgpt.cli import _make_adapter
+from trendgpt.contracts import validate_candidate_snapshot
 from trendgpt.sources import SourceRequest, merge_source_results
 
 
@@ -74,7 +75,6 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
             root = Path(temp) / "self-v1"
             with patch("trendgpt.adapters.youtube_search.get_public_text", return_value=html) as fetch:
                 result = YouTubeSearchAdapter().fetch(_request(root, query_role="release_date_gameplay"))
-            self.assertTrue(Path(result.evidence_refs[0]["path"]).is_file())
 
         result.validate()
         self.assertEqual(result.status, "partial")
@@ -95,6 +95,7 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
         self.assertTrue(result.coverage["continuation_present"])
         self.assertFalse(result.coverage["identity_resolved"])
         self.assertEqual(result.coverage["response_filter_status"], "unverified")
+        self.assertTrue(Path(result.evidence_refs[0]["path"]).is_file())
 
         query = parse_qs(urlsplit(fetch.call_args.args[0]).query)
         self.assertEqual(query["search_query"], ["releasedategameplay"])
@@ -108,7 +109,7 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
                 result = YouTubeSearchAdapter().fetch(
                     _request(root, query="upcominggame gameplay", query_role="upcoming_gameplay")
                 )
-        snapshot = merge_source_results(
+        snapshot = validate_candidate_snapshot(merge_source_results(
             [result],
             run_id="youtube-test-run",
             run_date="2026-11-10",
@@ -120,7 +121,7 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
             code_version="test",
             normalization_version="test",
             source_policy_version="test",
-        )
+        ))
         self.assertEqual(snapshot["candidates"], [])
         self.assertEqual(snapshot["counts"]["unparsed_records"], 1)
         clue = snapshot["unparsed_items"][0]
