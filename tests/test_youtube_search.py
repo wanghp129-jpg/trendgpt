@@ -75,6 +75,7 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
             root = Path(temp) / "self-v1"
             with patch("trendgpt.adapters.youtube_search.get_public_text", return_value=html) as fetch:
                 result = YouTubeSearchAdapter().fetch(_request(root, query_role="release_date_gameplay"))
+            self.assertTrue(Path(result.evidence_refs[0]["path"]).is_file())
 
         result.validate()
         self.assertEqual(result.status, "partial")
@@ -95,7 +96,6 @@ class YouTubeSearchAdapterTests(unittest.TestCase):
         self.assertTrue(result.coverage["continuation_present"])
         self.assertFalse(result.coverage["identity_resolved"])
         self.assertEqual(result.coverage["response_filter_status"], "unverified")
-        self.assertTrue(Path(result.evidence_refs[0]["path"]).is_file())
 
         query = parse_qs(urlsplit(fetch.call_args.args[0]).query)
         self.assertEqual(query["search_query"], ["releasedategameplay"])
