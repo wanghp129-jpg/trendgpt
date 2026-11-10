@@ -120,11 +120,16 @@ def merge_source_results(
                 "fetched_at": result.fetched_at,
                 "url": raw.get("url"),
                 "list_type": raw.get("list_type"),
+                "steam_filter": raw.get("steam_filter"),
                 "published_at": raw.get("published_at"),
             }
             for field_name in (
                 "release_date_text", "release_date_iso", "release_date_precision",
-                "price_text", "review_summary", "discount_text", "result_kind",
+                "price_text", "price_final_text", "price_original_text", "price_original",
+                "price_final_minor_units", "price_currency_id", "review_summary",
+                "review_tooltip_text", "review_positive_pct", "review_count",
+                "review_rating_class", "discount_text", "discount_pct",
+                "discount_pct_numeric", "steam_filter", "result_kind",
                 "steam_item_key", "steam_tag_ids",
             ):
                 if raw.get(field_name) is not None:
@@ -140,9 +145,12 @@ def merge_source_results(
                         candidate["raw_evidence_refs"].append(evidence)
                 metadata = {
                     key: raw.get(key) for key in (
-                        "list_type", "release_date_text", "release_date_iso",
-                        "price_text", "review_summary", "discount_text",
-                        "result_kind", "steam_item_key", "steam_tag_ids",
+                        "list_type", "steam_filter", "release_date_text", "release_date_iso",
+                        "price_text", "price_final_text", "price_original_text", "price_original",
+                        "price_final_minor_units", "price_currency_id", "review_summary",
+                        "review_tooltip_text", "review_positive_pct", "review_count",
+                        "review_rating_class", "discount_text", "discount_pct",
+                        "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
                     ) if raw.get(key) is not None
                 }
                 if metadata and metadata not in candidate["source_metadata"]:
@@ -153,9 +161,12 @@ def merge_source_results(
                 continue
             source_metadata = {
                 key: raw.get(key) for key in (
-                    "list_type", "release_date_text", "release_date_iso",
-                    "price_text", "review_summary", "discount_text",
-                    "result_kind", "steam_item_key", "steam_tag_ids",
+                    "list_type", "steam_filter", "release_date_text", "release_date_iso",
+                    "price_text", "price_final_text", "price_original_text", "price_original",
+                    "price_final_minor_units", "price_currency_id", "review_summary",
+                    "review_tooltip_text", "review_positive_pct", "review_count",
+                    "review_rating_class", "discount_text", "discount_pct",
+                    "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
                 ) if raw.get(key) is not None
             }
             candidate = {

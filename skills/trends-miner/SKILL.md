@@ -28,7 +28,7 @@ The command is opt-in and bounded by per-source page limits. It writes raw sourc
 
 ## Steam pilot
 
-For a small VPS validation, use config/source-plan.steam-validation.json and follow docs/STEAM_PILOT.md. The plan is explicitly US-English and bounded to two pages of ten rows per Steam list. Do not treat this pilot as complete source coverage.
+For a small VPS validation, use config/source-plan.steam-validation.json and follow docs/STEAM_PILOT.md. The plan is explicitly US-English and bounded to two pages of 25 rows per Steam list. The internal Recent Releases alias is translated to Steam filter=newreleases; Popular New Releases uses popularnew. Do not treat this pilot as complete source coverage.
 
 ## First-seen ledger
 
@@ -42,7 +42,7 @@ The command writes a separate enriched snapshot under first-seen/YYYY-MM-DD/RUN_
 
 - The source collector only discovers and normalizes; it does not run KD, Google Trends, domain checks, Feishu writes or website dispatch.
 - Preserve source records and partial/failure statuses. A parse with zero results is not proof of an empty source.
-- The current Roblox and YouTube adapters may report partial because they cannot prove full pagination. The Steam adapter reads Recent Releases and Popular New Releases with category1=998, extracts stable AppIDs from Steam app URLs, reconciles page rows with data-total-count when present, and preserves release-date text rather than inventing timestamps. A bounded multi-page run remains partial when the page cap is reached before the declared total.
+- The current Roblox and YouTube adapters may report partial because they cannot prove full pagination. The Steam adapter maps Recent Releases to the live Steam filter value newreleases and Popular New Releases to popularnew. It uses category1=998, extracts stable AppIDs from Steam app URLs, reconciles raw row counts with data-total-count, and advances pagination by observed raw rows when Steam returns more than the requested count. It extracts final/original prices, discounts and review tooltip metadata when present, while preserving nulls for genuinely missing values. A bounded multi-page run remains partial when the page cap is reached before the declared total.
 - Video titles are unresolved clues, not game names, unless a separate identity-resolution step supplies candidate_name.
 - The collector does not mark API-independence eligibility true. That requires a later evidence-backed benchmark exposure adjudication.
 - Never write to the existing API output, state, claim, automatic queue or site.json.

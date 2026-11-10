@@ -10,10 +10,13 @@ This is a research-only pilot. It does not read TrendOracle, does not compare ag
 
 The checked-in plan is config/source-plan.steam-validation.json:
 
-- Steam Recent Releases: US / English, 10 results per page, maximum 2 pages.
-- Steam Popular New Releases: US / English, 10 results per page, maximum 2 pages.
+- Steam Recent Releases: US / English, 25 results per page, maximum 2 pages. The source-plan alias recentreleases is translated to Steam's public filter value newreleases.
+- Steam Popular New Releases: US / English, 25 results per page, maximum 2 pages.
+- The previous VPS run observed 25 rows when count=10 was requested. The pilot now explicitly requests 25 so page-size accounting and pagination offsets are consistent.
 - Maximum public page requests: 4 total for one run.
 - Steam's Games category filter (category1=998) is added by the adapter.
+- The adapter advances by the number of raw Steam result rows actually returned, not by the requested count or only by successfully parsed AppIDs.
+- Price, original price, discount and review metadata are extracted from Steam's discount blocks and review tooltip attributes when present; missing values remain null.
 - No Steam login or account cookie is required or requested.
 
 The US/English values are an explicit pilot scope, not a claim that this is the only relevant market. Preserve them in every source record so later comparisons do not mix regional scopes.
@@ -74,11 +77,12 @@ For each of the two Steam source-plan entries, inspect:
 - candidate source metadata, release-date text and discovery reason;
 - candidate AppID and first-seen ledger key.
 
-Do not interpret human-readable release-date text as a precise UTC publication timestamp. The adapter deliberately preserves release_date_text and leaves published_at null until a deterministic parser is justified.
+Do not interpret human-readable release-date text as a precise UTC publication timestamp. The adapter deliberately preserves release_date_text and leaves published_at null until a deterministic parser is justified. Review counts, positive percentage, review label, final/original price and discount are only populated when the corresponding Steam row fields are present.
 
 ## Acceptance criteria
 
 PASS:
+- the Recent Releases request uses Steam filter=newreleases and Popular New Releases uses filter=popularnew;
 - both Steam list endpoints return a recognized page;
 - each parsed candidate has a numeric Steam AppID and a valid Steam store app URL;
 - candidate JSON passes the existing candidate contract;

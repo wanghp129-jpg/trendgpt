@@ -62,6 +62,20 @@ def _item(app_id, name, *, release_date="Nov 9, 2026"):
         "list_type": "recentreleases",
         "release_date_text": release_date,
         "price_text": "US$ 4.99",
+        "price_final_text": "US$ 4.99",
+        "price_original_text": "US$ 5.99",
+        "price_original": "US$ 5.99",
+        "price_final_minor_units": "499",
+        "price_currency_id": "1",
+        "review_summary": "Very Positive",
+        "review_tooltip_text": "Very Positive 94% of the 100 user reviews are positive.",
+        "review_positive_pct": 94.0,
+        "review_count": 100,
+        "review_rating_class": "positive",
+        "discount_text": "-20%",
+        "discount_pct": "-20%",
+        "discount_pct_numeric": 20,
+        "steam_filter": "newreleases",
         "discovery_reason": "Appeared in Steam Recent Releases",
     }
 
@@ -118,7 +132,16 @@ class SteamCollectPaginationTests(unittest.TestCase):
             self.assertEqual(snapshot["collection_status"], "complete")
             self.assertEqual(snapshot["candidates"][0]["sources"][0]["position"], 1)
             self.assertEqual(snapshot["candidates"][0]["sources"][0]["release_date_text"], "Nov 9, 2026")
-            self.assertEqual(snapshot["candidates"][0]["source_metadata"][0]["price_text"], "US$ 4.99")
+            metadata = snapshot["candidates"][0]["source_metadata"][0]
+            source = snapshot["candidates"][0]["sources"][0]
+            self.assertEqual(metadata["price_text"], "US$ 4.99")
+            self.assertEqual(metadata["review_count"], 100)
+            self.assertEqual(metadata["review_positive_pct"], 94.0)
+            self.assertEqual(metadata["discount_pct"], "-20%")
+            self.assertEqual(metadata["steam_filter"], "newreleases")
+            self.assertEqual(source["price_original_text"], "US$ 5.99")
+            self.assertEqual(source["review_summary"], "Very Positive")
+            self.assertEqual(source["discount_pct_numeric"], 20)
 
     def test_max_page_limit_keeps_source_partial_and_reports_next_cursor(self):
         with tempfile.TemporaryDirectory() as temp:

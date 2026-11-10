@@ -16,7 +16,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Strict JSON loading and first-pass contract validators.
 - Conservative Unicode/name normalization and exact/known-alias matching.
 - Provider-neutral source result contracts and candidate merging with unresolved-record preservation.
-- Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. The Steam adapter reconciles AppIDs, the Games category filter, declared page totals and bounded pagination; raw pages are hash-bound under self-v1.
+- Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. The Steam adapter maps the Recent Releases alias to the public newreleases filter, reconciles AppIDs, the Games category filter and declared page totals, advances by observed raw rows, and extracts price/review/discount metadata when present; raw pages are hash-bound under self-v1.
 - A multi-source collect command with explicit network opt-in, bounded pages, isolated candidate snapshots and per-page artifacts.
 - Browser instance registry for existing ports and planned 9226/9227 roles.
 - Cross-process ChatGPT flock lease wrapper and persistent self-v1 queue with idempotency, single-task claims, SHA-256 output checks, and uncertain-run review.
@@ -59,7 +59,7 @@ The command never invokes the API fetcher. It remains benchmark_not_ready until 
 
 ## Steam pilot
 
-See docs/STEAM_PILOT.md and run only config/source-plan.steam-validation.json for the bounded Steam VPS pilot. The plan reads US-English Recent Releases and Popular New Releases, up to two pages of ten rows each. It is not a production schedule and does not call TrendOracle or website_create.
+See docs/STEAM_PILOT.md and run only config/source-plan.steam-validation.json for the bounded Steam VPS pilot. The plan reads US-English Recent Releases and Popular New Releases, up to two pages of 25 rows each. It is not a production schedule and does not call TrendOracle or website_create.
 
 ## Browser and ChatGPT coordination
 

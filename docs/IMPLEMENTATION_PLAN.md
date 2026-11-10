@@ -72,13 +72,15 @@ The ledger does not infer cross-platform equivalence. A record with zero or mult
 
 - [x] Recognize Steam search_result_row markup as well as the legacy search_result fixture shape.
 - [x] Extract and reconcile numeric AppIDs from the app URL and data-ds-appid when present.
+- [x] Map the Recent Releases source-plan alias to Steam's actual public filter value newreleases; keep Popular New Releases as popularnew.
 - [x] Apply Steam's Games category filter (category1=998); reject package/bundle paths and AppID mismatches.
-- [x] Preserve release-date text, price/review metadata, list type, source rank, page cursor and hash-bound raw HTML evidence.
-- [x] Read data-total-count when available and reconcile expected rows for each page.
-- [x] Keep completeness unknown/partial when the source total is absent, rows mismatch, duplicate IDs occur, or the bounded page cap is reached.
+- [x] Preserve release-date text, final/original price, discount, review tooltip/class/count/positive percentage, list type, source rank, page cursor and hash-bound raw HTML evidence when present.
+- [x] Reconcile raw result-row count with data-total-count; use visible pagination text as a fallback when the data attribute is absent.
+- [x] Advance the next cursor by observed raw result rows, not requested page size or accepted AppID count, so Steam returning 25 rows for count=10 does not stop pagination.
+- [x] Keep completeness unknown/partial when the source total is absent, raw rows mismatch, duplicate IDs occur, or the bounded page cap is reached.
 - [x] Add pagination cursor-cycle protection and aggregate page evidence into one source-plan result.
-- [x] Add a US-English Steam-only pilot plan bounded to two pages of ten rows for each of Recent Releases and Popular New Releases.
-- [ ] Run the bounded live Steam pilot on the VPS; verify current markup, public access, AppIDs, page totals and raw evidence.
+- [x] Add a US-English Steam-only pilot plan bounded to two pages of 25 rows for each of Recent Releases and Popular New Releases.
+- [ ] Re-run the bounded live Steam pilot on the VPS; verify the corrected filter, 25-row page size, pagination, price/review/discount extraction, AppIDs, page totals and raw evidence.
 - [ ] Verify real Steam candidates through the first-seen ledger; confirm AppID and observed-at semantics.
 - [ ] Only after the live pilot passes, consider expanding Steam pagination or adding another Steam discovery endpoint.
 
