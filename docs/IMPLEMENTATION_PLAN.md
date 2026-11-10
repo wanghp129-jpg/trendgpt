@@ -44,12 +44,13 @@ A successful local morning read is not proof that the provider's returned set is
 
 - [x] Add a persistent entity ledger under the explicit self-v1 root, separate from daily run state and API production memory.
 - [x] Use stable platform IDs as the only automatic cross-run identity key.
-- [x] Preserve first/last observed timestamps, source IDs, evidence references and idempotent run observations.
+- [x] Preserve the earliest self-discovery timestamp and latest actual source-observation timestamp; union primary/supplementary source IDs and hash-bound evidence references; retain deduplicated source-observation records.
+- [x] Keep observation_count defined as distinct ledger input snapshot run IDs, separate from the number of source observations.
 - [x] Keep same-title/different-platform-ID records separate; no fuzzy or title-only merge.
 - [x] Route missing IDs, multiple platform IDs and missing timestamps into a persistent review queue.
 - [x] Enrich a copy of each candidate snapshot with stable entity IDs and ledger-backed first_self_discovered_at; never modify the original input snapshot.
 - [x] Add a CLI command and offline tests for first-seen persistence, cross-day continuity, idempotency and ambiguity.
-- [ ] Run the ledger on real Self snapshots after the first approved VPS source collection; verify platform IDs and source timestamps before using the values in benchmark comparisons.
+- [ ] Run the ledger on the approved Path of Exile 2 resolved snapshot in a new isolated self-v1 root; verify Steam first-seen time, later YouTube last-seen time, both source IDs, evidence references and idempotency before using the values in benchmark comparisons.
 
 Command:
 

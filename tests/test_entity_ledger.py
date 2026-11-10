@@ -100,6 +100,106 @@ class EntityFirstSeenLedgerTests(unittest.TestCase):
             frozen_first = json.loads(first_output.read_text(encoding="utf-8"))
             self.assertEqual(frozen_first["candidates"][0]["canonical_name"], "Game A")
 
+    def test_supplementary_evidence_contributes_source_ids_evidence_and_latest_observation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "self-v1"
+            ledger = EntityFirstSeenLedger(root)
+            snapshot = candidate_snapshot(
+                "identity-review-poe2-acc0c9c",
+                "2026-11-10",
+                "2026-11-10T02:04:44.940040+00:00",
+                name="Path of Exile 2",
+                platform_ids={"steam": "2694490"},
+            )
+            candidate = snapshot["candidates"][0]
+            steam_recent = "2026-11-10T02:04:44.940040+00:00"
+            steam_popular = "2026-11-10T02:04:46.309468+00:00"
+            youtube_seen = "2026-11-10T10:05:13.497712+00:00"
+            steam_ref = {"path": "/evidence/steam.html", "sha256": "a" * 64}
+            youtube_ref = {"path": "/evidence/youtube.html", "sha256": "b" * 64}
+            candidate["raw_evidence_refs"] = [steam_ref]
+            candidate["origin_events"] = [
+                {
+                    "origin": "self_discovered", "source_id": "steam",
+                    "observed_at": steam_recent, "run_id": "steam-pilot-round3-2026-11-10-020443",
+                },
+                {
+                    "origin": "self_discovered", "source_id": "steam",
+                    "observed_at": steam_popular, "run_id": "steam-pilot-round3-2026-11-10-020443",
+                },
+                {
+                    "origin": "self_discovered", "source_id": "youtube",
+                    "observed_at": youtube_seen, "run_id": "identity-review-poe2-acc0c9c",
+                },
+            ]
+            candidate["sources"] = [
+                {"source_id": "steam", "source_record_id": "2694490", "fetched_at": steam_recent},
+                {"source_id": "steam", "source_record_id": "2694490", "fetched_at": steam_popular},
+            ]
+            candidate["supplementary_evidence"] = [{
+                "source_id": "youtube",
+                "source_record_id": "2bST1HEU8K4",
+                "video_id": "2bST1HEU8K4",
+                "fetched_at": youtube_seen,
+                "raw_evidence_refs": [youtube_ref],
+            }]
+            snapshot["source_runs"] = [
+                {"source_id": "steam", "status": "complete"},
+                {"source_id": "youtube", "status": "partial"},
+            ]
+
+            first = ledger.record_snapshot(snapshot)
+            second = ledger.record_snapshot(snapshot)
+            entity = ledger.read()["entities"]["platform:steam:2694490"]
+
+        self.assertEqual(first["status"], "recorded")
+        self.assertEqual(second["status"], "reused")
+        self.assertEqual(entity["first_seen_at"], "2026-11-10T02:04:44.940040Z")
+        self.assertEqual(entity["last_seen_at"], "2026-11-10T10:05:13.497712Z")
+        self.assertEqual(entity["source_ids"], ["steam", "youtube"])
+        self.assertEqual(entity["observation_count"], 1)
+        self.assertEqual(len(entity["observed_run_ids"]), 1)
+        self.assertEqual(len(entity["source_observations"]), 3)
+        self.assertEqual(
+            {item["source_id"] for item in entity["source_observations"]},
+            {"steam", "youtube"},
+        )
+        self.assertIn(steam_ref, entity["evidence_refs"])
+        self.assertIn(youtube_ref, entity["evidence_refs"])
+
+    def test_legacy_entity_record_without_source_observations_is_upgraded_safely(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "self-v1"
+            ledger = EntityFirstSeenLedger(root)
+            first = candidate_snapshot(
+                "run-legacy", "2026-11-09", "2026-11-09T00:02:00+08:00",
+                platform_ids={"steam": "12345"},
+            )
+            ledger.record_snapshot(first)
+            stored = ledger.read()
+            stored["entities"]["platform:steam:12345"].pop("source_observations", None)
+            ledger.ledger_path.write_text(
+                json.dumps(stored, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            second = candidate_snapshot(
+                "run-after-legacy", "2026-11-10", "2026-11-10T00:03:00+08:00",
+                platform_ids={"steam": "12345"},
+            )
+            second_candidate = second["candidates"][0]
+            second_candidate["supplementary_evidence"] = [{
+                "source_id": "youtube",
+                "fetched_at": "2026-11-10T00:04:00+08:00",
+            }]
+            result = ledger.record_snapshot(second)
+            entity = ledger.read()["entities"]["platform:steam:12345"]
+
+        self.assertEqual(result["status"], "recorded")
+        self.assertEqual(entity["source_ids"], ["steam", "youtube"])
+        self.assertEqual(entity["last_seen_at"], "2026-11-09T16:04:00Z")
+        self.assertEqual(len(entity["source_observations"]), 2)
+
     def test_replaying_same_run_is_idempotent(self):
         with tempfile.TemporaryDirectory() as temp:
             ledger = EntityFirstSeenLedger(Path(temp) / "self-v1")

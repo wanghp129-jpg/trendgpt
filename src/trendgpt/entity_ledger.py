@@ -97,40 +97,154 @@ def _stable_platform_keys(candidate: dict[str, Any]) -> list[tuple[str, str]]:
     return sorted(pairs)
 
 
+def _optional_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return _parse_timestamp(value)
+    except ContractError:
+        return None
+
+
+def _candidate_observation_window(
+    candidate: dict[str, Any],
+) -> tuple[datetime | None, datetime | None, list[dict[str, str]]]:
+    """Return first/last source-observed times and deduplicated source observations."""
+    observations: list[dict[str, str]] = []
+
+    def add(source_id: Any, observed_at: Any, event_run_id: Any = None) -> None:
+        if not isinstance(source_id, str) or not source_id.strip():
+            return
+        parsed = _optional_timestamp(observed_at)
+        if parsed is None:
+            return
+        normalized = _utc_iso(parsed)
+        source_name = source_id.strip()
+        run_id = event_run_id.strip() if isinstance(event_run_id, str) and event_run_id.strip() else None
+        matching = [
+            item for item in observations
+            if item.get("source_id") == source_name and item.get("observed_at") == normalized
+        ]
+        if matching:
+            if run_id and not any(item.get("event_run_id") == run_id for item in matching):
+                if any("event_run_id" not in item for item in matching):
+                    for item in matching:
+                        if "event_run_id" not in item:
+                            item["event_run_id"] = run_id
+                            return
+                observations.append({
+                    "source_id": source_name,
+                    "observed_at": normalized,
+                    "event_run_id": run_id,
+                })
+            return
+        item = {"source_id": source_name, "observed_at": normalized}
+        if run_id:
+            item["event_run_id"] = run_id
+        observations.append(item)
+
+    events = candidate.get("origin_events")
+    if isinstance(events, list):
+        for event in events:
+            if not isinstance(event, dict) or event.get("origin") != "self_discovered":
+                continue
+            add(event.get("source_id"), event.get("observed_at"), event.get("run_id"))
+
+    sources = candidate.get("sources")
+    if isinstance(sources, list):
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            add(
+                source.get("source_id"),
+                source.get("source_fetched_at") or source.get("fetched_at"),
+                source.get("source_run_id") or source.get("run_id"),
+            )
+
+    supplementary = candidate.get("supplementary_evidence")
+    if isinstance(supplementary, list):
+        for evidence in supplementary:
+            if not isinstance(evidence, dict):
+                continue
+            add(
+                evidence.get("source_id"),
+                evidence.get("fetched_at"),
+                evidence.get("source_run_id") or evidence.get("run_id"),
+            )
+
+    observations.sort(key=lambda item: (
+        item["observed_at"], item["source_id"], item.get("event_run_id", "")
+    ))
+    observed_times = [
+        parsed for item in observations
+        if (parsed := _optional_timestamp(item.get("observed_at"))) is not None
+    ]
+
+    first_marker = _optional_timestamp(candidate.get("first_self_discovered_at"))
+    if first_marker is None:
+        first_marker = _optional_timestamp(candidate.get("first_discovered_at"))
+
+    first_values = [*observed_times]
+    if first_marker is not None:
+        first_values.append(first_marker)
+    if not first_values:
+        return None, None, observations
+
+    first_observed = min(first_values)
+    # Last-seen means the latest actual source observation, not the first-seen marker.
+    last_observed = max(observed_times) if observed_times else first_marker
+    return first_observed, last_observed, observations
+
+
 def _candidate_observed_at(candidate: dict[str, Any]) -> datetime:
-    value = candidate.get("first_self_discovered_at")
-    if value is None:
-        events = candidate.get("origin_events")
-        if isinstance(events, list):
-            self_events = [
-                item.get("observed_at") for item in events
-                if isinstance(item, dict) and item.get("origin") == "self_discovered"
-            ]
-            value = next((item for item in self_events if isinstance(item, str)), None)
-    return _parse_timestamp(value)
+    """Backward-compatible helper returning the earliest known self-observation."""
+    first_observed, _, _ = _candidate_observation_window(candidate)
+    if first_observed is None:
+        raise ContractError("candidate first-seen timestamp is missing")
+    return first_observed
 
 
 def _source_ids(candidate: dict[str, Any]) -> list[str]:
-    sources = candidate.get("sources")
-    if not isinstance(sources, list):
-        return []
-    return sorted({
-        item["source_id"] for item in sources
-        if isinstance(item, dict) and isinstance(item.get("source_id"), str)
-    })
+    source_ids: set[str] = set()
+    for collection_name in ("sources", "supplementary_evidence", "origin_events"):
+        collection = candidate.get(collection_name)
+        if not isinstance(collection, list):
+            continue
+        for item in collection:
+            if not isinstance(item, dict):
+                continue
+            source_id = item.get("source_id")
+            if isinstance(source_id, str) and source_id.strip():
+                source_ids.add(source_id.strip())
+    return sorted(source_ids)
 
 
 def _evidence_refs(candidate: dict[str, Any]) -> list[dict[str, str]]:
-    refs = candidate.get("raw_evidence_refs")
-    if not isinstance(refs, list):
-        return []
-    result = []
-    for item in refs:
-        if not isinstance(item, dict):
-            continue
-        path, digest = item.get("path"), item.get("sha256")
-        if isinstance(path, str) and isinstance(digest, str):
-            result.append({"path": path, "sha256": digest})
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(refs: Any) -> None:
+        if not isinstance(refs, list):
+            return
+        for item in refs:
+            if not isinstance(item, dict):
+                continue
+            path, digest = item.get("path"), item.get("sha256")
+            if not isinstance(path, str) or not path.strip():
+                continue
+            if not isinstance(digest, str) or not digest.strip():
+                continue
+            key = (path, digest)
+            if key not in seen:
+                seen.add(key)
+                result.append({"path": path, "sha256": digest})
+
+    add(candidate.get("raw_evidence_refs"))
+    supplementary = candidate.get("supplementary_evidence")
+    if isinstance(supplementary, list):
+        for evidence in supplementary:
+            if isinstance(evidence, dict):
+                add(evidence.get("raw_evidence_refs"))
     return result
 
 
@@ -208,12 +322,9 @@ class EntityFirstSeenLedger:
 
             for candidate in enriched["candidates"]:
                 pairs = _stable_platform_keys(candidate)
-                try:
-                    observed = _candidate_observed_at(candidate)
-                except ContractError:
-                    observed = None
+                first_observed, last_observed, source_observations = _candidate_observation_window(candidate)
 
-                if len(pairs) != 1 or observed is None:
+                if len(pairs) != 1 or first_observed is None or last_observed is None:
                     reason = (
                         "multiple_platform_ids_require_explicit_cross_platform_mapping"
                         if len(pairs) > 1 else
@@ -239,7 +350,8 @@ class EntityFirstSeenLedger:
                 platform, platform_id = pairs[0]
                 entity_key = f"platform:{platform}:{platform_id}"
                 entity_id = entity_key
-                observed_at = _utc_iso(observed)
+                first_observed_at = _utc_iso(first_observed)
+                last_observed_at = _utc_iso(last_observed)
                 record = ledger["entities"].get(entity_key)
                 if record is None:
                     record = {
@@ -249,13 +361,14 @@ class EntityFirstSeenLedger:
                         "platform_id": platform_id,
                         "canonical_name": candidate["canonical_name"],
                         "aliases": [],
-                        "first_seen_at": observed_at,
-                        "last_seen_at": observed_at,
+                        "first_seen_at": first_observed_at,
+                        "last_seen_at": last_observed_at,
                         "first_run_id": run_id,
                         "last_run_id": run_id,
                         "observation_count": 0,
                         "observed_run_ids": [],
                         "source_ids": [],
+                        "source_observations": [],
                         "evidence_refs": [],
                     }
                     ledger["entities"][entity_key] = record
@@ -274,17 +387,28 @@ class EntityFirstSeenLedger:
 
                 first_seen = _parse_timestamp(record["first_seen_at"])
                 last_seen = _parse_timestamp(record["last_seen_at"])
-                if observed < first_seen:
-                    record["first_seen_at"] = observed_at
+                if first_observed < first_seen:
+                    record["first_seen_at"] = first_observed_at
                     record["first_run_id"] = run_id
-                if observed > last_seen:
-                    record["last_seen_at"] = observed_at
+                if last_observed > last_seen:
+                    record["last_seen_at"] = last_observed_at
                     record["last_run_id"] = run_id
 
                 if run_id not in record["observed_run_ids"]:
                     record["observed_run_ids"].append(run_id)
                     record["observation_count"] = len(record["observed_run_ids"])
-                record["source_ids"] = sorted(set(record["source_ids"]) | set(_source_ids(candidate)))
+                record["source_ids"] = sorted(set(record.get("source_ids", [])) | set(_source_ids(candidate)))
+                existing_observations = record.setdefault("source_observations", [])
+                if not isinstance(existing_observations, list):
+                    raise ContractError(f"entity ledger source_observations must be an array: {entity_key}")
+                for observation in source_observations:
+                    if observation not in existing_observations:
+                        existing_observations.append(observation)
+                existing_observations.sort(key=lambda item: (
+                    item.get("observed_at", ""),
+                    item.get("source_id", ""),
+                    item.get("event_run_id", ""),
+                ))
                 for ref in _evidence_refs(candidate):
                     if ref not in record["evidence_refs"]:
                         record["evidence_refs"].append(ref)
