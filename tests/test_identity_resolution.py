@@ -134,6 +134,7 @@ class CandidateResolutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             snapshot, _ = _snapshot(root)
+            snapshot["unparsed_items"][0]["fetched_at"] = "2026-11-10T00:00:30+08:00"
             input_path = root / "candidate_keywords.json"
             input_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
             digest = file_sha256(input_path)
@@ -154,6 +155,7 @@ class CandidateResolutionTests(unittest.TestCase):
         self.assertEqual(candidate["platform_ids"], {"steam": "12345"})
         self.assertEqual(candidate["supplementary_evidence"][0]["source_record_id"], "abcdefghijk")
         self.assertEqual(candidate["supplementary_evidence"][0]["published_at"], None)
+        self.assertEqual(candidate["first_self_discovered_at"], "2026-11-10T00:00:30+08:00")
         self.assertIn("Neon Drift Game", candidate["aliases"])
         self.assertEqual(resolved["unparsed_items"][0]["resolution_status"], "linked_to_candidate")
         self.assertEqual(report["applied"]["linked"], 1)
@@ -235,6 +237,8 @@ class CandidateResolutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             snapshot, _ = _snapshot(root, include_clue=False, two_candidates=True)
+            snapshot["candidates"][1]["first_self_discovered_at"] = "2026-11-10T00:00:45+08:00"
+            snapshot["candidates"][1]["first_discovered_at"] = "2026-11-10T00:00:45+08:00"
             input_path = root / "candidate_keywords.json"
             input_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
             digest = file_sha256(input_path)
@@ -259,6 +263,7 @@ class CandidateResolutionTests(unittest.TestCase):
         self.assertEqual(resolved["candidates"][0]["platform_ids"], {"steam": "12345", "roblox": "98765"})
         self.assertEqual(resolved["candidates"][0]["entity_resolution"]["status"], "human_adjudicated_cross_platform_merge")
         self.assertEqual(resolved["candidates"][0]["candidate_quality"]["tier"], "C")
+        self.assertEqual(resolved["candidates"][0]["first_self_discovered_at"], "2026-11-10T00:00:45+08:00")
         self.assertEqual(report["applied"]["merged"], 1)
         self.assertEqual(result["entities_confirmed"], 0)
         self.assertEqual(result["needs_review"], 1)

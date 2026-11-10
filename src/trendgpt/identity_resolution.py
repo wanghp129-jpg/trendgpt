@@ -17,6 +17,7 @@ from typing import Any
 
 from .contracts import ContractError, validate_candidate_snapshot
 from .normalize import normalize_entity_key
+from .storage import reject_symlink_components
 
 PLAN_SCHEMA = "self-candidate-resolution-plan-v1"
 RESOLVER_VERSION = "candidate-resolver-v1"
@@ -198,6 +199,7 @@ def _validate_refs(refs: object, allowed: list[dict[str, str]], name: str) -> li
         if (path, digest) not in allowed_set:
             raise ContractError(f"{name}[{index}] is not present in the source evidence")
         evidence_path = Path(path)
+        reject_symlink_components(evidence_path)
         if evidence_path.is_symlink() or not evidence_path.is_file():
             raise ContractError(f"{name}[{index}] evidence file is missing or is a symlink")
         if file_sha256(evidence_path) != digest:
@@ -206,6 +208,20 @@ def _validate_refs(refs: object, allowed: list[dict[str, str]], name: str) -> li
     if not normalized:
         raise ContractError(f"{name} must contain at least one source evidence reference")
     return normalized
+
+
+def _earliest_timestamp(*values: object) -> str | None:
+    parsed: list[tuple[datetime, str]] = []
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if instant.tzinfo is not None:
+            parsed.append((instant, value))
+    return min(parsed, key=lambda item: item[0])[1] if parsed else None
 
 
 def _timestamp_or_none(value: object) -> str | None:
@@ -318,9 +334,16 @@ def _merge_candidate_records(primary: dict[str, Any], secondary: dict[str, Any],
         if isinstance(secondary_values, list):
             _append_unique(primary[key], secondary_values)
 
+    earliest_seen = _earliest_timestamp(
+        primary.get("first_self_discovered_at"), primary.get("first_discovered_at"),
+        secondary.get("first_self_discovered_at"), secondary.get("first_discovered_at"),
+    )
     primary["canonical_name"] = canonical.strip()
     primary["aliases"] = [alias for alias in aliases if normalize_entity_key(alias) != normalize_entity_key(canonical)]
     primary["platform_ids"] = combined_ids
+    if earliest_seen is not None:
+        primary["first_self_discovered_at"] = earliest_seen
+        primary["first_discovered_at"] = earliest_seen
     merge_refs = merge.get("evidence_refs", [])
     primary.setdefault("raw_evidence_refs", [])
     _append_unique(primary["raw_evidence_refs"], merge_refs)
@@ -448,6 +471,20 @@ def resolve_candidate_snapshot(snapshot: dict[str, Any], plan: dict[str, Any], *
                 raise ContractError(f"approved link target no longer exists: {target_id}")
             target.setdefault("supplementary_evidence", [])
             _append_unique(target["supplementary_evidence"], [evidence])
+            youtube_event = {
+                "origin": "self_discovered",
+                "source_id": "youtube",
+                "observed_at": clue.get("fetched_at"),
+                "run_id": resolved["run_id"],
+            }
+            target.setdefault("origin_events", [])
+            _append_unique(target["origin_events"], [youtube_event])
+            earliest_seen = _earliest_timestamp(
+                target.get("first_self_discovered_at"), target.get("first_discovered_at"), clue.get("fetched_at")
+            )
+            if earliest_seen is not None:
+                target["first_self_discovered_at"] = earliest_seen
+                target["first_discovered_at"] = earliest_seen
             aliases = _unique_strings(decision.get("aliases", []))
             target_keys = {normalize_entity_key(target.get("canonical_name", "")), *(normalize_entity_key(item) for item in target.get("aliases", []))}
             for alias in aliases:

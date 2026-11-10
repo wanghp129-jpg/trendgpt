@@ -121,7 +121,7 @@ The corrected pilot remains global unless a future endpoint response proves a na
 - [x] Link reviewed YouTube clues to existing game candidates without using video IDs as game IDs.
 - [x] Create reviewer-approved name-only candidates without fabricated platform IDs; route them to first-seen review.
 - [x] Preserve reviewed non-game clues and all original unparsed source evidence for audit.
-- [x] Support explicit cross-platform candidate merges, reject conflicting IDs on the same platform, and preserve all source/platform evidence.
+- [x] Support explicit cross-platform candidate merges, reject conflicting IDs on the same platform, preserve all source/platform evidence and carry forward the earliest observed timestamp.
 - [x] Normalize Unicode, punctuation and symbol variants for comparison and alias de-duplication without fuzzy identity merging.
 - [x] Add deterministic candidate quality tiers A/B/C/REVIEW based on stable identity and independent source evidence, not trend potential.
 - [x] Add CLI commands prepare-resolution and resolve-candidates; write resolved snapshots/reports separately and reject stale input hashes or output overwrites.
