@@ -268,6 +268,22 @@ class CandidateResolutionTests(unittest.TestCase):
         self.assertEqual(result["entities_confirmed"], 0)
         self.assertEqual(result["needs_review"], 1)
 
+    def test_merge_plan_rejects_unknown_approval_status(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            snapshot, _ = _snapshot(root, include_clue=False, two_candidates=True)
+            input_path = root / "candidate_keywords.json"
+            input_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            digest = file_sha256(input_path)
+            plan = prepare_resolution_plan(snapshot, input_path=str(input_path), input_sha256=digest)
+            plan["merges"] = [{
+                "primary_candidate_id": "candidate-steam-1",
+                "secondary_candidate_id": "candidate-roblox-1",
+                "approval_status": "maybe",
+            }]
+            with self.assertRaises(ContractError):
+                resolve_candidate_snapshot(snapshot, plan, input_sha256=digest)
+
     def test_conflicting_ids_on_same_platform_cannot_be_merged(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

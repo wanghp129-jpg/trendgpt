@@ -425,7 +425,10 @@ def validate_resolution_plan(plan: Any, snapshot: dict[str, Any], *, input_sha25
     for index, merge in enumerate(merges):
         if not isinstance(merge, dict):
             raise ContractError(f"merges[{index}] must be an object")
-        if merge.get("approval_status", "pending") != "approved":
+        merge_approval = merge.get("approval_status", "pending")
+        if merge_approval not in APPROVALS:
+            raise ContractError(f"merges[{index}].approval_status is invalid")
+        if merge_approval != "approved":
             continue
         primary = _require_nonempty(merge.get("primary_candidate_id"), f"merges[{index}].primary_candidate_id")
         secondary = _require_nonempty(merge.get("secondary_candidate_id"), f"merges[{index}].secondary_candidate_id")
