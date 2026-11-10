@@ -166,7 +166,7 @@ class SteamCollectPaginationTests(unittest.TestCase):
             self.assertEqual(ledger_result["entities_confirmed"], 3)
             enriched = json.loads(Path(ledger_result["output_path"]).read_text(encoding="utf-8"))
             enriched_by_name = {item["canonical_name"]: item for item in enriched["candidates"]}
-            self.assertEqual(enriched_by_name["Game C"]["first_self_discovered_at"], "2026-11-10T00:02:00+00:00")
+            self.assertEqual(enriched_by_name["Game C"]["first_self_discovered_at"], "2026-11-10T00:02:00Z")
 
     def test_max_page_limit_keeps_source_partial_and_reports_next_cursor(self):
         with tempfile.TemporaryDirectory() as temp:
