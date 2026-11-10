@@ -5,7 +5,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from trendgpt.adapters.roblox import _RobloxCards
 from trendgpt.adapters.steam import _SteamResults
 from trendgpt.benchmark_snapshot import read_archived_api_snapshot
 from trendgpt.sources import SourceResult, merge_source_results
@@ -24,14 +23,6 @@ class AdapterParserTests(unittest.TestCase):
         self.assertEqual(len(parser.items), 1)
         self.assertEqual(parser.items[0]["name"], "Game A")
         self.assertEqual(parser.items[0]["platform_id"], "12345")
-
-    def test_roblox_parser_extracts_stable_game_id(self):
-        parser = _RobloxCards()
-        parser.feed('<a href="/games/98765/Some-Game" title="Some Game">Some Game</a>')
-        self.assertEqual(len(parser.items), 1)
-        self.assertEqual(parser.items[0]["platform_id"], "98765")
-        self.assertEqual(parser.items[0]["name"], "Some Game")
-
 
 class CandidateMergeTests(unittest.TestCase):
     def test_video_title_is_preserved_as_unparsed_not_mistaken_for_game_name(self):

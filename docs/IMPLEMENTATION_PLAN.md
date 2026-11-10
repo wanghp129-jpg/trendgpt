@@ -90,13 +90,13 @@ See docs/STEAM_PILOT.md. The checked-in pilot plan is a controlled validation sc
 
 ## Stage 2 — source discovery
 
-1. Validate the Roblox Up-and-Coming and Top Playing Now adapters against current pages, stable identifiers, region/device scope and coverage.
-2. Validate Steam recent releases and popular new releases, app IDs, DLC/bundle filtering and pagination.
-3. Validate YouTube RSS query behavior and identity-resolution review; keep known-keyword SEO discovery separate from unknown-game discovery.
-4. Improve pagination completeness evidence. The current HTML adapters intentionally report partial when full coverage cannot be proven.
-5. Implement bounded multi-page collection, per-source checkpointing, run snapshots and incremental updates.
+1. Complete the bounded VPS pilot for Roblox Up-and-Coming and Top Playing Now; verify anonymous access, stable universe IDs, root place IDs, chart metadata, opaque pagination and evidence hashes.
+2. Keep the Steam source at its current PASS_WITH_RISK state; the Recent Releases server-side filter effect remains unverifiable until evidence can establish it.
+3. Implement and validate YouTube RSS supplementary discovery, keeping known-keyword SEO discovery separate from unknown-game identity resolution.
+4. Improve source-specific pagination completeness evidence without claiming a full Roblox or Steam catalog crawl.
+5. Add bounded per-source checkpointing, run snapshots and incremental updates after each adapter passes its live pilot.
 6. Normalize and merge records; ambiguous identity must be reviewed, not fuzzy-merged.
-7. Run repeated read-only collection snapshots before creating the trends-miner Skill.
+7. Run repeated read-only collection snapshots before enabling any schedule or creating a production Skill.
 
 ## Stage 3 — validation
 

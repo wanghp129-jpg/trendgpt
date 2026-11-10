@@ -7,7 +7,7 @@ description: Discover candidate games from bounded public source adapters, prese
 
 ## Status
 
-The Python source adapters and bounded multi-source collector are implemented in this repository, but live source accessibility and completeness have not yet been verified on the target server. Do not enable a timer until that verification is complete.
+The Python source adapters and bounded multi-source collector are implemented in this repository. Steam has a VPS PASS_WITH_RISK pilot; Roblox dual-board code is fixture-tested and awaits its bounded VPS pilot; YouTube remains unverified. Do not enable a timer or production Skill until each source is separately verified.
 
 ## Required inputs
 

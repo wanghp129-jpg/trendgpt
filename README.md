@@ -31,7 +31,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 
 ## Not yet production-ready
 
-The public source adapters have only been fixture-tested; current live-page accessibility and full pagination are not yet verified. The 9226/9227 Chrome instances are not configured by this repository. The actual Playwright/CDP ChatGPT cleaner worker and strict output-schema validation are still pending. Existing code_before scripts have not yet been wired to the shared lock; until they are, the lock cannot prevent those scripts from running concurrently. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, in-flight production task reconciliation, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and rule release/shadow scheduling remain staged work.
+The Roblox dual-board adapter has fixture and pagination tests but its live VPS pilot is pending. The Steam pilot has been VPS-tested with PASS_WITH_RISK; its Recent Releases server-side filter effect remains unverifiable. YouTube live access and entity resolution remain unverified. No source adapter is production-scheduled or connected to website dispatch. The 9226/9227 Chrome instances are not configured by this repository. The actual Playwright/CDP ChatGPT cleaner worker and strict output-schema validation are still pending. Existing code_before scripts have not yet been wired to the shared lock; until they are, the lock cannot prevent those scripts from running concurrently. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, in-flight production task reconciliation, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and rule release/shadow scheduling remain staged work.
 
 ## Local use
 
@@ -56,6 +56,10 @@ Read docs/IMPLEMENTATION_PLAN.md, docs/INTERFACES.md, and docs/PORTING.md before
     trendgpt snapshot-api-ingest --ingest-root /root/.openclaw/skills/trendoracle-ingest --date 2026-11-09 --output-root /root/.openclaw/skills/keyword-feedback-loop/output/self-v1
 
 The command never invokes the API fetcher. It remains benchmark_not_ready until the provider batch identity, update freshness and complete-set semantics can be proven.
+
+## Roblox pilot
+
+See docs/ROBLOX_PILOT.md and use config/source-plan.roblox-validation.json for the bounded US/computer Up-and-Coming and Top Playing Now VPS pilot (50 rows/page, up to two pages per board, four requests maximum). It uses anonymous Roblox Explore API GET requests and never uses a login, cookie or proxy.
 
 ## Steam pilot
 

@@ -152,8 +152,11 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
     run_key = sha256(args.run_id.encode("utf-8")).hexdigest()[:16]
     source_results: list[SourceResult] = []
     source_summary: list[dict[str, Any]] = []
+    abort_remaining_sources = False
 
     for source_index, spec in enumerate(plan["sources"]):
+        if abort_remaining_sources:
+            break
         if not isinstance(spec, dict) or spec.get("source") not in {"steam", "roblox", "youtube"}:
             raise ContractError(f"source plan entry {source_index} has an invalid source")
         source = spec["source"]
@@ -199,6 +202,11 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
 
             if result.status in {"failed", "blocked"}:
                 stop_reason = "source_error"
+                if source == "roblox" or any(error.get("retryable") is True for error in result.errors):
+                    # Roblox's public Explore host is shared by both boards. If one
+                    # board is blocked or errors, stop the remaining Roblox requests
+                    # rather than compounding a host-level throttle/challenge.
+                    abort_remaining_sources = True
                 break
             if not result.next_cursor:
                 stop_reason = "source_reported_no_next_cursor"
@@ -218,12 +226,14 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
         page_starts: list[int] = []
         page_sizes: list[int] = []
         totals: list[int] = []
+        pagination_modes: set[str] = set()
         all_pages_complete = bool(pages)
         all_items: list[dict[str, Any]] = []
         all_evidence_refs: list[dict[str, str]] = []
         all_errors: list[dict[str, Any]] = []
         seen_platform_ids: set[str] = set()
         duplicate_ids_across_pages = 0
+        raw_rows_seen = 0
 
         for page_index, page in enumerate(pages):
             coverage = page.coverage if isinstance(page.coverage, dict) else {}
@@ -236,6 +246,12 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             raw_total = coverage.get("total_results")
             if isinstance(raw_total, int) and not isinstance(raw_total, bool):
                 totals.append(raw_total)
+            pagination_mode = coverage.get("pagination_mode")
+            if isinstance(pagination_mode, str) and pagination_mode:
+                pagination_modes.add(pagination_mode)
+            page_raw_rows = coverage.get("raw_rows")
+            if not isinstance(page_raw_rows, int) or isinstance(page_raw_rows, bool) or page_raw_rows < 0:
+                page_raw_rows = len(page.items)
 
             all_pages_complete = all_pages_complete and coverage.get("page_complete") is True
             for position, item in enumerate(page.items):
@@ -252,7 +268,13 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
                     enriched["steam_filter"] = page_filter
                     enriched["source_filter"] = page_filter
                     enriched["filter_source"] = "request_query_parameter"
-                if isinstance(raw_start, int) and not isinstance(raw_start, bool):
+                if pagination_mode == "opaque_page_token":
+                    local_rank = item.get("source_rank")
+                    if isinstance(local_rank, int) and not isinstance(local_rank, bool) and local_rank > 0:
+                        enriched["source_rank"] = raw_rows_seen + local_rank
+                    else:
+                        enriched["source_rank"] = raw_rows_seen + position + 1
+                elif isinstance(raw_start, int) and not isinstance(raw_start, bool):
                     enriched["source_rank"] = raw_start + position + 1
                 platform_id = enriched.get("platform_id") or enriched.get("source_record_id")
                 if isinstance(platform_id, (str, int)):
@@ -263,6 +285,7 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
                         seen_platform_ids.add(key)
                 all_items.append(enriched)
 
+            raw_rows_seen += page_raw_rows
             for ref in page.evidence_refs:
                 if ref not in all_evidence_refs:
                     all_evidence_refs.append(ref)
@@ -279,18 +302,30 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             and len(page_starts) == len(pages)
         )
         unique_platform_ids = len(seen_platform_ids)
-        pagination_complete = (
-            stop_reason == "source_reported_no_next_cursor"
-            and all_pages_complete
-            and totals_consistent
-            and page_size_consistent
-            and sequential_pages
-            and total_results is not None
-            and unique_platform_ids == total_results
-            and len(all_items) == unique_platform_ids
-            and duplicate_ids_across_pages == 0
-        )
-
+        if pagination_modes == {"opaque_page_token"}:
+            # Roblox chart pagination is token-based and does not expose a
+            # trustworthy total count. "Complete" means the server supplied no
+            # nextPageToken and every returned row was parsed without duplicates;
+            # it never means the full Roblox catalog was crawled.
+            pagination_complete = (
+                stop_reason == "source_reported_no_next_cursor"
+                and all_pages_complete
+                and raw_rows_seen == len(all_items)
+                and unique_platform_ids == len(all_items)
+                and duplicate_ids_across_pages == 0
+            )
+        else:
+            pagination_complete = (
+                stop_reason == "source_reported_no_next_cursor"
+                and all_pages_complete
+                and totals_consistent
+                and page_size_consistent
+                and sequential_pages
+                and total_results is not None
+                and unique_platform_ids == total_results
+                and len(all_items) == unique_platform_ids
+                and duplicate_ids_across_pages == 0
+            )
         if not pages:
             aggregate_status = "failed"
         elif not all_items and all(page.status == "blocked" for page in pages):
@@ -318,6 +353,12 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "page_limit": page_limit,
             "max_pages": max_pages,
         }
+        if pagination_modes:
+            aggregate_scope["pagination_mode"] = sorted(pagination_modes)[0] if len(pagination_modes) == 1 else "mixed"
+        for scope_key in ("sort_id", "country", "device"):
+            values = [page.scope.get(scope_key) for page in pages]
+            if values and all(value is not None for value in values) and len(set(values)) == 1:
+                aggregate_scope[scope_key] = values[0]
         page_filters = [
             page.scope.get("filter") or page.scope.get("steam_filter")
             for page in pages
@@ -330,8 +371,15 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "page_index": index,
                 "cursor": page.cursor,
+                "next_cursor": page.next_cursor,
+                "status": page.status,
                 "fetched_at": page.fetched_at,
                 "url": page.scope.get("url"),
+                "sort_id": page.scope.get("sort_id"),
+                "list_type": page.scope.get("list_type"),
+                "country": page.scope.get("country"),
+                "device": page.scope.get("device"),
+                "coverage": page.coverage,
                 "filter": page.scope.get("filter") or page.scope.get("steam_filter"),
                 "filter_source": page.scope.get("filter_source") or (
                     "request_query_parameter"
@@ -349,7 +397,9 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "page_size": page_size_used,
             "total_results": total_results,
             "raw_items": len(all_items),
+            "raw_rows_seen": raw_rows_seen,
             "unique_platform_ids": unique_platform_ids,
+            "pagination_mode": aggregate_scope.get("pagination_mode"),
             "duplicate_platform_ids_across_pages": duplicate_ids_across_pages,
             "all_pages_complete": all_pages_complete,
             "pagination_complete": pagination_complete,
@@ -375,6 +425,11 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "filter": aggregate_scope.get("filter"),
             "steam_filter": aggregate_scope.get("steam_filter"),
             "filter_source": aggregate_scope.get("filter_source"),
+            "list_type": aggregate_scope.get("list_type"),
+            "sort_id": aggregate_scope.get("sort_id"),
+            "country": aggregate_scope.get("country"),
+            "device": aggregate_scope.get("device"),
+            "pagination_mode": aggregate_scope.get("pagination_mode"),
             "status": aggregate.status,
             "pages": len(pages),
             "items": len(all_items),
@@ -388,6 +443,8 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
             "errors": all_errors,
             "evidence_refs": all_evidence_refs,
         })
+        if abort_remaining_sources:
+            break
 
     collected_at = datetime.now(timezone.utc).isoformat()
     snapshot = merge_source_results(

@@ -5,7 +5,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-ALLOWED_HOSTS = {"store.steampowered.com", "www.roblox.com", "www.youtube.com"}
+ALLOWED_HOSTS = {"store.steampowered.com", "www.roblox.com", "apis.roblox.com", "www.youtube.com"}
 
 
 class SourceFetchError(RuntimeError):

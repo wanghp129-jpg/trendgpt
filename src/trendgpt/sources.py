@@ -125,6 +125,9 @@ def merge_source_results(
                 "source_run_fetched_at": result.fetched_at,
                 "url": raw.get("url"),
                 "list_type": raw.get("list_type"),
+                "sort_id": raw.get("sort_id"),
+                "country": raw.get("country"),
+                "device": raw.get("device"),
                 "filter": raw.get("filter") or raw.get("source_filter") or raw.get("steam_filter"),
                 "filter_source": raw.get("filter_source"),
                 "steam_filter": raw.get("steam_filter") or raw.get("filter") or raw.get("source_filter"),
@@ -132,6 +135,9 @@ def merge_source_results(
             }
             for field_name in (
                 "release_date_text", "release_date_iso", "release_date_precision",
+                "universe_id", "root_place_id", "player_count", "playerCount",
+                "total_up_votes", "total_down_votes", "is_sponsored", "genre_l1", "genre_l2",
+                "creator_name", "sort_id", "source_rank", "signals",
                 "price_text", "price_final_text", "price_original_text", "price_original",
                 "price_final_minor_units", "price_currency_id", "filter", "source_filter", "filter_source", "review_summary", "review_summary_source",
                 "review_tooltip_text", "review_positive_pct", "review_count",
@@ -160,7 +166,9 @@ def merge_source_results(
                         candidate["raw_evidence_refs"].append(evidence)
                 metadata = {
                     key: raw.get(key) for key in (
-                        "list_type", "filter", "source_filter", "filter_source", "steam_filter", "release_date_text", "release_date_iso",
+                        "list_type", "sort_id", "country", "device", "filter", "source_filter", "filter_source", "steam_filter", "release_date_text", "release_date_iso",
+                        "universe_id", "root_place_id", "player_count", "playerCount",
+                        "total_up_votes", "total_down_votes", "is_sponsored", "genre_l1", "genre_l2", "creator_name", "source_rank", "signals",
                         "price_text", "price_final_text", "price_original_text", "price_original",
                         "price_final_minor_units", "price_currency_id", "review_summary", "review_summary_source",
                         "review_tooltip_text", "review_positive_pct", "review_count",
@@ -176,7 +184,9 @@ def merge_source_results(
                 continue
             source_metadata = {
                 key: raw.get(key) for key in (
-                    "list_type", "filter", "source_filter", "filter_source", "steam_filter", "release_date_text", "release_date_iso",
+                    "list_type", "sort_id", "country", "device", "filter", "source_filter", "filter_source", "steam_filter", "release_date_text", "release_date_iso",
+                    "universe_id", "root_place_id", "player_count", "playerCount",
+                    "total_up_votes", "total_down_votes", "is_sponsored", "genre_l1", "genre_l2", "creator_name", "source_rank", "signals",
                     "price_text", "price_final_text", "price_original_text", "price_original",
                     "price_final_minor_units", "price_currency_id", "review_summary", "review_summary_source",
                     "review_tooltip_text", "review_positive_pct", "review_count",
