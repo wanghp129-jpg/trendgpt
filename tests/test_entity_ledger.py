@@ -188,6 +188,12 @@ class EntityFirstSeenLedgerTests(unittest.TestCase):
                 platform_ids={"steam": "12345"},
             )
             second_candidate = second["candidates"][0]
+            second_candidate["origin_events"].append({
+                "origin": "self_discovered",
+                "source_id": "youtube",
+                "observed_at": "2026-11-10T00:04:00+08:00",
+                "run_id": "run-after-legacy",
+            })
             second_candidate["supplementary_evidence"] = [{
                 "source_id": "youtube",
                 "fetched_at": "2026-11-10T00:04:00+08:00",
@@ -199,6 +205,26 @@ class EntityFirstSeenLedgerTests(unittest.TestCase):
         self.assertEqual(entity["source_ids"], ["steam", "youtube"])
         self.assertEqual(entity["last_seen_at"], "2026-11-09T16:04:00Z")
         self.assertEqual(len(entity["source_observations"]), 2)
+
+    def test_external_supplementary_context_does_not_extend_self_discovery_window(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "self-v1"
+            ledger = EntityFirstSeenLedger(root)
+            snapshot = candidate_snapshot(
+                "run-external-context", "2026-11-10", "2026-11-10T00:02:00+08:00",
+                platform_ids={"steam": "12345"},
+            )
+            candidate = snapshot["candidates"][0]
+            candidate["supplementary_evidence"] = [{
+                "source_id": "external_reference",
+                "fetched_at": "2026-11-10T00:05:00+08:00",
+            }]
+            ledger.record_snapshot(snapshot)
+            entity = ledger.read()["entities"]["platform:steam:12345"]
+
+        self.assertEqual(entity["source_ids"], ["steam"])
+        self.assertEqual(entity["last_seen_at"], "2026-11-09T16:02:00Z")
+        self.assertEqual(len(entity["source_observations"]), 1)
 
     def test_replaying_same_run_is_idempotent(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -143,12 +143,16 @@ def _candidate_observation_window(
             item["event_run_id"] = run_id
         observations.append(item)
 
+    self_discovery_sources: set[str] = set()
     events = candidate.get("origin_events")
     if isinstance(events, list):
         for event in events:
             if not isinstance(event, dict) or event.get("origin") != "self_discovered":
                 continue
-            add(event.get("source_id"), event.get("observed_at"), event.get("run_id"))
+            source_id = event.get("source_id")
+            if isinstance(source_id, str) and source_id.strip():
+                self_discovery_sources.add(source_id.strip())
+            add(source_id, event.get("observed_at"), event.get("run_id"))
 
     sources = candidate.get("sources")
     if isinstance(sources, list):
@@ -166,8 +170,13 @@ def _candidate_observation_window(
         for evidence in supplementary:
             if not isinstance(evidence, dict):
                 continue
+            source_id = evidence.get("source_id")
+            # Supplementary context counts as a discovery observation only when
+            # an explicit self_discovered origin event corroborates that source.
+            if not isinstance(source_id, str) or source_id.strip() not in self_discovery_sources:
+                continue
             add(
-                evidence.get("source_id"),
+                source_id,
                 evidence.get("fetched_at"),
                 evidence.get("source_run_id") or evidence.get("run_id"),
             )
@@ -206,15 +215,30 @@ def _candidate_observed_at(candidate: dict[str, Any]) -> datetime:
 
 def _source_ids(candidate: dict[str, Any]) -> list[str]:
     source_ids: set[str] = set()
-    for collection_name in ("sources", "supplementary_evidence", "origin_events"):
-        collection = candidate.get(collection_name)
-        if not isinstance(collection, list):
-            continue
-        for item in collection:
-            if not isinstance(item, dict):
-                continue
-            source_id = item.get("source_id")
+    for source in candidate.get("sources", []) if isinstance(candidate.get("sources"), list) else []:
+        if isinstance(source, dict):
+            source_id = source.get("source_id")
             if isinstance(source_id, str) and source_id.strip():
+                source_ids.add(source_id.strip())
+
+    self_discovery_sources: set[str] = set()
+    events = candidate.get("origin_events")
+    if isinstance(events, list):
+        for event in events:
+            if not isinstance(event, dict) or event.get("origin") != "self_discovered":
+                continue
+            source_id = event.get("source_id")
+            if isinstance(source_id, str) and source_id.strip():
+                self_discovery_sources.add(source_id.strip())
+                source_ids.add(source_id.strip())
+
+    supplementary = candidate.get("supplementary_evidence")
+    if isinstance(supplementary, list):
+        for evidence in supplementary:
+            if not isinstance(evidence, dict):
+                continue
+            source_id = evidence.get("source_id")
+            if isinstance(source_id, str) and source_id.strip() in self_discovery_sources:
                 source_ids.add(source_id.strip())
     return sorted(source_ids)
 
