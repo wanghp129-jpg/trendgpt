@@ -333,7 +333,11 @@ def _collect(args: argparse.Namespace) -> dict[str, Any]:
                 "fetched_at": page.fetched_at,
                 "url": page.scope.get("url"),
                 "filter": page.scope.get("filter") or page.scope.get("steam_filter"),
-                "filter_source": page.scope.get("filter_source"),
+                "filter_source": page.scope.get("filter_source") or (
+                    "request_query_parameter"
+                    if page.scope.get("filter") or page.scope.get("steam_filter")
+                    else None
+                ),
                 "raw_rows": page.coverage.get("raw_rows") if isinstance(page.coverage, dict) else None,
                 "parsed_items": page.coverage.get("parsed_items", len(page.items)) if isinstance(page.coverage, dict) else len(page.items),
             }
