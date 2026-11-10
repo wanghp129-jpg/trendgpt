@@ -178,7 +178,7 @@ def merge_source_results(
                 key: raw.get(key) for key in (
                     "list_type", "filter", "source_filter", "steam_filter", "release_date_text", "release_date_iso",
                     "price_text", "price_final_text", "price_original_text", "price_original",
-                    "price_final_minor_units", "price_currency_id", "review_summary",
+                    "price_final_minor_units", "price_currency_id", "review_summary", "review_summary_source",
                     "review_tooltip_text", "review_positive_pct", "review_count",
                     "review_rating_class", "discount_text", "discount_pct",
                     "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
