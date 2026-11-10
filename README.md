@@ -16,7 +16,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 - Strict JSON loading and first-pass contract validators.
 - Conservative Unicode/name normalization and exact/known-alias matching.
 - Provider-neutral source result contracts and candidate merging with unresolved-record preservation.
-- Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public chart pages and supplementary YouTube RSS clues. The Steam adapter maps the Recent Releases alias to the public newreleases filter, reconciles AppIDs, the Games category filter and declared page totals, advances by observed raw rows, and extracts price/review/discount metadata when present; preserves actual request filter values and per-page observation timestamps through candidate aggregation; raw pages are hash-bound under self-v1.
+- Bounded, allowlisted HTTPS adapters for Steam search pages, Roblox public charts and supplementary YouTube recent-upload search pages. The Steam adapter maps the Recent Releases alias to the public newreleases filter, reconciles AppIDs, the Games category filter and declared page totals, advances by observed raw rows, and extracts price/review/discount metadata when present; preserves actual request filter values and per-page observation timestamps through candidate aggregation; raw pages are hash-bound under self-v1.
 - A multi-source collect command with explicit network opt-in, bounded pages, isolated candidate snapshots and per-page artifacts.
 - Browser instance registry for existing ports and planned 9226/9227 roles.
 - Cross-process ChatGPT flock lease wrapper and persistent self-v1 queue with idempotency, single-task claims, SHA-256 output checks, and uncertain-run review.
@@ -31,7 +31,7 @@ A portable implementation of Lesson 14's new-game discovery pipeline, developed 
 
 ## Not yet production-ready
 
-The Roblox dual-board adapter has fixture and pagination tests but its live VPS pilot is pending. The Steam pilot has been VPS-tested with PASS_WITH_RISK; its Recent Releases server-side filter effect remains unverifiable. YouTube live access and entity resolution remain unverified. No source adapter is production-scheduled or connected to website dispatch. The 9226/9227 Chrome instances are not configured by this repository. The actual Playwright/CDP ChatGPT cleaner worker and strict output-schema validation are still pending. Existing code_before scripts have not yet been wired to the shared lock; until they are, the lock cannot prevent those scripts from running concurrently. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, in-flight production task reconciliation, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and rule release/shadow scheduling remain staged work.
+The Steam and Roblox adapters have completed bounded VPS pilots with PASS_WITH_RISK; Steam's Recent Releases provider-side filter effect and Roblox's effective scope/full coverage remain unverified. The YouTube recent-upload search adapter is implemented and awaits its bounded VPS pilot; video-to-game identity resolution remains a separate pending step. No source adapter is production-scheduled or connected to website dispatch. The 9226/9227 Chrome instances are not configured by this repository. The actual Playwright/CDP ChatGPT cleaner worker and strict output-schema validation are still pending. Existing code_before scripts have not yet been wired to the shared lock; until they are, the lock cannot prevent those scripts from running concurrently. Similarweb KD browser automation, DataForSEO task integration, final candidate-vs-GPTs Google Trends browser review, batch domain availability, Feishu valid-report/image writing, in-flight production task reconciliation, the approved self-source adapter for website_create, complete multi-round orchestration, site-performance history joins and rule release/shadow scheduling remain staged work.
 
 ## Local use
 
@@ -56,6 +56,10 @@ Read docs/IMPLEMENTATION_PLAN.md, docs/INTERFACES.md, and docs/PORTING.md before
     trendgpt snapshot-api-ingest --ingest-root /root/.openclaw/skills/trendoracle-ingest --date 2026-11-09 --output-root /root/.openclaw/skills/keyword-feedback-loop/output/self-v1
 
 The command never invokes the API fetcher. It remains benchmark_not_ready until the provider batch identity, update freshness and complete-set semantics can be proven.
+
+## YouTube pilot
+
+See docs/YOUTUBE_PILOT.md and use config/source-plan.youtube-validation.json for the bounded recent-upload clue pilot (two Lesson 14 queries, `sp=EgQIAhAB`, 15 accepted video results/query, one page/query, two requests maximum). Video titles remain unresolved clues; they are not game entities.
 
 ## Roblox pilot
 

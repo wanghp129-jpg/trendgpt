@@ -11,7 +11,7 @@ This repository is a staged, portable implementation. A component is not conside
 - [x] Self-v1 state store with a dedicated root, file lock, revision check, and same-slot conflict protection.
 - [x] Descriptive revenue grouping that does not mutate rules.
 - [x] Provider-neutral source result contracts and conservative candidate merge.
-- [x] Bounded Steam, Roblox chart and YouTube RSS source adapters; raw source text is preserved under the explicit self-v1 evidence root.
+- [x] Bounded Steam, Roblox chart and YouTube recent-upload search adapters; raw source text is preserved under the explicit self-v1 evidence root.
 - [x] Read-only archived API snapshot conversion; provider freshness/completeness remains unknown by default.
 - [x] Original foundation revision had 72 offline tests passing; every subsequent revision requires fresh CI.
 - [ ] Validate public source parsers against current live pages in an approved environment.
@@ -82,9 +82,9 @@ The ledger does not infer cross-platform equivalence. A record with zero or mult
 - [x] Keep completeness unknown/partial when the source total is absent, raw rows mismatch, duplicate IDs occur, or the bounded page cap is reached.
 - [x] Add pagination cursor-cycle protection and aggregate page evidence into one source-plan result.
 - [x] Add a US-English Steam-only pilot plan bounded to two pages of 25 rows for each of Recent Releases and Popular New Releases.
-- [ ] Re-run the bounded live Steam pilot on the VPS; verify the corrected filter, 25-row page size, pagination, price/review/discount extraction, AppIDs, page totals and raw evidence.
-- [ ] Verify real Steam candidates through the first-seen ledger; confirm AppID and observed-at semantics.
-- [ ] Only after the live pilot passes, consider expanding Steam pagination or adding another Steam discovery endpoint.
+- [x] Complete bounded VPS Steam pilots and isolate real candidate/ledger verification.
+- [x] VPS acceptance is PASS_WITH_RISK: Candidate Contract and isolated first-seen ledger passed; Recent Releases provider-side filter effect remains unverifiable.
+- [ ] Only after additional provider-side filter evidence exists, consider expanding Steam pagination or adding another Steam discovery endpoint.
 
 See docs/STEAM_PILOT.md. The checked-in pilot plan is a controlled validation scope, not a claim of complete Steam coverage.
 
@@ -96,15 +96,28 @@ See docs/STEAM_PILOT.md. The checked-in pilot plan is a controlled validation sc
 - [x] Preserve a fixed Roblox source-record and source_metadata field set, including explicit null values for missing player/vote/genre/creator/sponsored fields.
 - [x] Accept safe timezone-offset plus signs in first-seen ledger run IDs such as +0800.
 - [x] Add offline tests for effective-scope mismatch, oversized responses, null metadata preservation and timezone-offset run IDs.
-- [ ] Run the corrected bounded Roblox VPS pilot; verify both boards, actual effective scope, maxRows enforcement, raw evidence, candidate contract and first-seen ledger.
+- [x] Complete the bounded Roblox VPS pilot and verify real candidates, Candidate Contract, isolated first-seen ledger and idempotency.
+- [x] VPS acceptance is PASS_WITH_RISK: 2 successful requests, 197 raw rows, 100 admitted rows, 97 overflow rows and 95 unique candidates; effective scope remains unverified and coverage is truncated.
 
 The corrected pilot remains global unless a future endpoint response proves a narrower effective scope. It is still a selected-chart sample, not a crawl of the Roblox catalog.
+
+## Stage 2.3 — YouTube recent-upload supplementary discovery implementation
+
+- [x] Implement anonymous YouTube search HTML parsing using the Lesson 14 recent-upload URL filter sp=EgQIAhAB.
+- [x] Add the two course queries: releasedategameplay and upcominggame gameplay.
+- [x] Preserve video ID, title, channel identity, description, duration, view-count and relative published-time evidence.
+- [x] Keep absolute published_at null when only relative display text is available.
+- [x] Keep video titles unresolved; do not turn video IDs or titles into game entities.
+- [x] Add bounded one-page-per-query collection, row cap, overflow accounting and hash-bound raw HTML evidence.
+- [x] Add offline parser, URL/filter, video identity, unresolved-title and overflow tests.
+- [ ] Run the bounded YouTube live pilot on the VPS; verify both search queries, current HTML structure, video/channel IDs, evidence hashes and candidate contract.
+- [ ] Design a separate evidence-backed video-to-game identity resolution step; ambiguous titles remain unparsed.
 
 ## Stage 2 — source discovery
 
 1. Complete the bounded VPS pilot for Roblox Up-and-Coming and Top Playing Now; verify anonymous access, stable universe IDs, root place IDs, chart metadata, opaque pagination and evidence hashes.
 2. Keep the Steam source at its current PASS_WITH_RISK state; the Recent Releases server-side filter effect remains unverifiable until evidence can establish it.
-3. Implement and validate YouTube RSS supplementary discovery, keeping known-keyword SEO discovery separate from unknown-game identity resolution.
+3. Implement and validate YouTube recent-upload supplementary discovery using the Lesson 14 query phrases and upload filter; keep video-title clues separate from confirmed game identity resolution.
 4. Improve source-specific pagination completeness evidence without claiming a full Roblox or Steam catalog crawl.
 5. Add bounded per-source checkpointing, run snapshots and incremental updates after each adapter passes its live pilot.
 6. Normalize and merge records; ambiguous identity must be reviewed, not fuzzy-merged.

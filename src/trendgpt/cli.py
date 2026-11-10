@@ -97,8 +97,8 @@ def _make_adapter(source: str):
         from .adapters.roblox import RobloxChartAdapter
         return RobloxChartAdapter()
     if source == "youtube":
-        from .adapters.youtube_rss import YouTubeRssAdapter
-        return YouTubeRssAdapter()
+        from .adapters.youtube_search import YouTubeSearchAdapter
+        return YouTubeSearchAdapter()
     raise ContractError(f"unknown source: {source}")
 
 

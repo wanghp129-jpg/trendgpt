@@ -115,7 +115,9 @@ def merge_source_results(
             if not isinstance(title, str) or not title.strip():
                 unparsed_records += 1
                 unparsed_items.append({
-                    "source_id": result.source_id, "position": position,
+                    "source_id": result.source_id,
+                    "source_record_id": str(source_record_id) if source_record_id is not None else None,
+                    "raw_evidence_refs": list(result.evidence_refs), "position": position,
                     "reason": "source record has no resolved game identity",
                     "raw_record": raw, "fetched_at": observed_at,
                 })
