@@ -1,0 +1,266 @@
+"""Provider-neutral source contracts; no network calls occur in this module."""
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
+SOURCE_STATUSES = {"complete", "partial", "failed", "blocked"}
+
+
+@dataclass(frozen=True)
+class SourceRequest:
+    run_id: str
+    source_id: str
+    fetched_at: str
+    scope: dict[str, Any]
+    evidence_root: str
+    cursor: str | None = None
+    page_limit: int | None = None
+    since: str | None = None
+
+
+@dataclass
+class SourceResult:
+    source_id: str
+    status: str
+    fetched_at: str
+    scope: dict[str, Any]
+    items: list[dict[str, Any]] = field(default_factory=list)
+    cursor: str | None = None
+    next_cursor: str | None = None
+    coverage: dict[str, Any] = field(default_factory=dict)
+    evidence_refs: list[dict[str, str]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
+
+    def validate(self) -> "SourceResult":
+        if not isinstance(self.source_id, str) or not self.source_id.strip():
+            raise ValueError("source_id is required")
+        if self.status not in SOURCE_STATUSES:
+            raise ValueError(f"invalid source status: {self.status}")
+        if not isinstance(self.items, list) or not all(isinstance(item, dict) for item in self.items):
+            raise ValueError("items must be an array of objects")
+        if self.status == "complete" and self.errors:
+            raise ValueError("complete source result cannot contain unresolved errors")
+        if self.status == "complete" and self.next_cursor:
+            raise ValueError("complete source result cannot have an unconsumed next_cursor")
+        if self.status in {"failed", "blocked"} and not self.errors:
+            raise ValueError("failed/blocked source result must include an error")
+        return self
+
+    def to_dict(self) -> dict[str, Any]:
+        self.validate()
+        return asdict(self)
+
+
+class SourceAdapter:
+    """Structural base class; implementations must make bounded, explicit reads."""
+
+    source_id: str
+
+    def fetch(self, request: SourceRequest) -> SourceResult:
+        raise NotImplementedError
+
+
+
+ROBLOX_SOURCE_METADATA_FIELDS = (
+    "universe_id", "root_place_id", "player_count", "playerCount",
+    "total_up_votes", "total_down_votes", "is_sponsored",
+    "genre_l1", "genre_l2", "creator_name", "sort_id",
+    "country", "device", "requested_country", "requested_device",
+    "scope_verification", "source_rank", "signals", "list_type",
+)
+
+
+def merge_source_results(
+    source_results: list[SourceResult],
+    *,
+    run_id: str,
+    run_date: str,
+    slot: str,
+    timezone: str,
+    started_at: str,
+    collected_at: str,
+    cutoff_at: str,
+    code_version: str,
+    normalization_version: str,
+    source_policy_version: str,
+) -> dict[str, Any]:
+    """Build a candidate snapshot without injecting API/manual candidates.
+
+    Stable platform IDs are deduplicated. Same-name records across platforms remain
+    separate until an explicit entity mapping exists. Unresolved video titles are
+    preserved as unparsed records, not mislabelled as game names.
+    """
+    from hashlib import sha256
+    from .normalize import normalize_name
+
+    normalized_results = [result.validate() for result in source_results]
+    source_runs, candidates, seen, unparsed_items = [], [], {}, []
+    raw_records = parsed_records = unparsed_records = 0
+
+    for result in normalized_results:
+        source_runs.append({
+            "source_id": result.source_id, "status": result.status, "scope": result.scope,
+            "fetched_at": result.fetched_at, "cursor": result.cursor, "next_cursor": result.next_cursor,
+            "coverage": result.coverage, "errors": result.errors, "raw_evidence_refs": result.evidence_refs,
+        })
+        for position, raw in enumerate(result.items):
+            raw_records += 1
+            observed_at = raw.get("source_fetched_at") or raw.get("fetched_at") or result.fetched_at
+            if not isinstance(observed_at, str) or not observed_at.strip():
+                observed_at = result.fetched_at
+            title = raw.get("candidate_name") or raw.get("name") or raw.get("keyword")
+            source_record_id = raw.get("source_record_id") or raw.get("platform_id") or raw.get("id")
+            platform = raw.get("platform") or result.source_id
+            if not isinstance(title, str) or not title.strip():
+                unparsed_records += 1
+                unparsed_items.append({
+                    "source_id": result.source_id,
+                    "source_record_id": str(source_record_id) if source_record_id is not None else None,
+                    "raw_evidence_refs": list(result.evidence_refs), "position": position,
+                    "reason": "source record has no resolved game identity",
+                    "raw_record": raw, "fetched_at": observed_at,
+                })
+                continue
+            parsed_records += 1
+            identity = f"{platform}:{source_record_id}" if source_record_id is not None else f"{result.source_id}:{normalize_name(title)}:{position}"
+            candidate_id = sha256(identity.encode("utf-8")).hexdigest()[:24]
+            source_record = {
+                "source_id": result.source_id,
+                "source_record_id": str(source_record_id) if source_record_id is not None else None,
+                "position": raw.get("source_rank", position),
+                "page_index": raw.get("source_page_index"),
+                "page_cursor": raw.get("source_page_cursor"),
+                "page_position": raw.get("source_page_position", position),
+                "fetched_at": observed_at,
+                "source_fetched_at": observed_at,
+                "source_run_fetched_at": result.fetched_at,
+                "url": raw.get("url"),
+                "list_type": raw.get("list_type"),
+                "sort_id": raw.get("sort_id"),
+                "country": raw.get("country"),
+                "device": raw.get("device"),
+                "filter": raw.get("filter") or raw.get("source_filter") or raw.get("steam_filter"),
+                "filter_source": raw.get("filter_source"),
+                "steam_filter": raw.get("steam_filter") or raw.get("filter") or raw.get("source_filter"),
+                "published_at": raw.get("published_at"),
+            }
+            for field_name in (
+                "release_date_text", "release_date_iso", "release_date_precision",
+                "universe_id", "root_place_id", "player_count", "playerCount",
+                "total_up_votes", "total_down_votes", "is_sponsored", "genre_l1", "genre_l2",
+                "creator_name", "sort_id", "source_rank", "signals",
+                "price_text", "price_final_text", "price_original_text", "price_original",
+                "price_final_minor_units", "price_currency_id", "filter", "source_filter", "filter_source", "review_summary", "review_summary_source",
+                "review_tooltip_text", "review_positive_pct", "review_count",
+                "review_rating_class", "discount_text", "discount_pct",
+                "discount_pct_numeric", "steam_filter", "result_kind",
+                "steam_item_key", "steam_tag_ids",
+            ):
+                if raw.get(field_name) is not None:
+                    source_record[field_name] = raw[field_name]
+
+            if result.source_id == "roblox":
+                for field_name in ROBLOX_SOURCE_METADATA_FIELDS:
+                    source_record[field_name] = raw.get(field_name)
+
+            if identity in seen:
+                candidate = seen[identity]
+                if title not in candidate["raw_titles"]:
+                    candidate["raw_titles"].append(title)
+                candidate["sources"].append(source_record)
+                observation_event = {
+                    "origin": "self_discovered",
+                    "source_id": result.source_id,
+                    "observed_at": observed_at,
+                    "run_id": run_id,
+                }
+                if observation_event not in candidate["origin_events"]:
+                    candidate["origin_events"].append(observation_event)
+                for evidence in result.evidence_refs:
+                    if evidence not in candidate["raw_evidence_refs"]:
+                        candidate["raw_evidence_refs"].append(evidence)
+                metadata = {
+                    key: raw.get(key) for key in (
+                        "list_type", "sort_id", "country", "device", "filter", "source_filter", "filter_source", "steam_filter", "release_date_text", "release_date_iso",
+                        "universe_id", "root_place_id", "player_count", "playerCount",
+                        "total_up_votes", "total_down_votes", "is_sponsored", "genre_l1", "genre_l2", "creator_name", "source_rank", "signals",
+                        "price_text", "price_final_text", "price_original_text", "price_original",
+                        "price_final_minor_units", "price_currency_id", "review_summary", "review_summary_source",
+                        "review_tooltip_text", "review_positive_pct", "review_count",
+                        "review_rating_class", "discount_text", "discount_pct",
+                        "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
+                    ) if raw.get(key) is not None
+                }
+                if result.source_id == "roblox":
+                    metadata.update({key: raw.get(key) for key in ROBLOX_SOURCE_METADATA_FIELDS})
+                if metadata and metadata not in candidate["source_metadata"]:
+                    candidate["source_metadata"].append(metadata)
+                reason = raw.get("discovery_reason")
+                if isinstance(reason, str) and reason and reason not in candidate["discovery_reasons"]:
+                    candidate["discovery_reasons"].append(reason)
+                continue
+            source_metadata = {
+                key: raw.get(key) for key in (
+                    "list_type", "sort_id", "country", "device", "filter", "source_filter", "filter_source", "steam_filter", "release_date_text", "release_date_iso",
+                    "universe_id", "root_place_id", "player_count", "playerCount",
+                    "total_up_votes", "total_down_votes", "is_sponsored", "genre_l1", "genre_l2", "creator_name", "source_rank", "signals",
+                    "price_text", "price_final_text", "price_original_text", "price_original",
+                    "price_final_minor_units", "price_currency_id", "review_summary", "review_summary_source",
+                    "review_tooltip_text", "review_positive_pct", "review_count",
+                    "review_rating_class", "discount_text", "discount_pct",
+                    "discount_pct_numeric", "result_kind", "steam_item_key", "steam_tag_ids",
+                ) if raw.get(key) is not None
+            }
+            if result.source_id == "roblox":
+                source_metadata.update({key: raw.get(key) for key in ROBLOX_SOURCE_METADATA_FIELDS})
+            candidate = {
+                "candidate_id": candidate_id,
+                "entity_id": f"provisional:{candidate_id}",
+                "canonical_name": title.strip(),
+                "aliases": [],
+                "raw_titles": [title],
+                "entity_resolution": {"status": "provisional", "method": "source_record_identity", "confidence": None},
+                "platforms": [str(platform)],
+                "platform_ids": {str(platform): str(source_record_id)} if source_record_id is not None else {},
+                "discovery_origin": "self_discovered",
+                "origin_events": [{
+                    "origin": "self_discovered", "source_id": result.source_id,
+                    "observed_at": observed_at, "run_id": run_id,
+                }],
+                "first_discovered_at": observed_at,
+                "first_self_discovered_at": observed_at,
+                "independent_eligibility": {
+                    "eligible": None, "reason": "API exposure chronology has not been adjudicated",
+                },
+                "sources": [source_record],
+                "source_metadata": [source_metadata] if source_metadata else [],
+                "platform_signals": raw.get("signals", []) if isinstance(raw.get("signals", []), list) else [],
+                "discovery_reasons": [str(raw.get("discovery_reason") or f"observed in {result.source_id}")],
+                "raw_evidence_refs": list(result.evidence_refs),
+                "missing_fields": [],
+            }
+            seen[identity] = candidate
+            candidates.append(candidate)
+
+    statuses = {result.status for result in normalized_results}
+    if not normalized_results or statuses <= {"failed", "blocked"}:
+        collection_status, completeness = "failed", "unknown"
+    elif statuses == {"complete"}:
+        collection_status, completeness = "complete", "complete"
+    else:
+        collection_status, completeness = "partial", "partial"
+
+    return {
+        "schema": "self-candidate-keywords-v1",
+        "run_id": run_id, "date": run_date, "slot": slot, "timezone": timezone,
+        "started_at": started_at, "collected_at": collected_at, "cutoff_at": cutoff_at,
+        "code_version": code_version, "normalization_version": normalization_version,
+        "source_policy_version": source_policy_version,
+        "collection_status": collection_status, "completeness": completeness,
+        "source_runs": source_runs, "candidates": candidates, "unparsed_items": unparsed_items,
+        "counts": {
+            "raw_records": raw_records, "parsed_records": parsed_records,
+            "unparsed_records": unparsed_records, "entities": len(candidates),
+        },
+    }

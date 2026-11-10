@@ -1,0 +1,25 @@
+{
+  "schema": "trendgpt-source-plan-v1",
+  "sources": [
+    {
+      "source": "youtube",
+      "scope": {
+        "query": "releasedategameplay",
+        "query_role": "release_date_gameplay",
+        "upload_filter": "EgQIAhAB"
+      },
+      "page_limit": 15,
+      "max_pages": 1
+    },
+    {
+      "source": "youtube",
+      "scope": {
+        "query": "upcominggame gameplay",
+        "query_role": "upcoming_gameplay",
+        "upload_filter": "EgQIAhAB"
+      },
+      "page_limit": 15,
+      "max_pages": 1
+    }
+  ]
+}

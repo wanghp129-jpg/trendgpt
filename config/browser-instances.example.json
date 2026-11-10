@@ -1,0 +1,59 @@
+{
+  "schema": "trendgpt-browser-instances-v1",
+  "timezone": "Asia/Shanghai",
+  "instances": [
+    {
+      "name": "similarweb",
+      "port": 9221,
+      "role": "similarweb_validation",
+      "status": "existing_preserve",
+      "chatgpt_account": false,
+      "concurrency": "single_owner"
+    },
+    {
+      "name": "xuqu-browser",
+      "port": 9223,
+      "role": "code_before_clarity",
+      "status": "existing_preserve",
+      "chatgpt_account": true,
+      "concurrency": "single_owner"
+    },
+    {
+      "name": "code-browser",
+      "port": 9224,
+      "role": "code_before_basic_info",
+      "status": "existing_preserve",
+      "chatgpt_account": true,
+      "concurrency": "single_owner"
+    },
+    {
+      "name": "code-browser-2",
+      "port": 9225,
+      "role": "code_before_homepage_info",
+      "status": "existing_preserve",
+      "chatgpt_account": true,
+      "concurrency": "single_owner"
+    },
+    {
+      "name": "trends-source-browser",
+      "port": 9226,
+      "role": "trends_source_collection",
+      "status": "planned_not_configured",
+      "chatgpt_account": false,
+      "concurrency": "single_owner"
+    },
+    {
+      "name": "trends-chatgpt-cleaner",
+      "port": 9227,
+      "role": "trends_keyword_cleaning",
+      "status": "planned_not_configured",
+      "chatgpt_account": true,
+      "concurrency": "single_owner"
+    }
+  ],
+  "chatgpt_global_lock": {
+    "path": "/CHANGE-ME/to/shared/openclaw-locks/chatgpt-global.lock",
+    "required_for_all_chatgpt_callers": true,
+    "notes": "Use the same lock path in TrendGPT and code_before. This example path is not configured on the server."
+  }
+}
