@@ -34,7 +34,18 @@ class _PagedRobloxAdapter:
                 "url": f"https://apis.roblox.com/explore-api/v1/get-sort-content?sortId={list_type}",
                 "pagination_mode": "opaque_page_token",
             },
-            items=page["items"],
+            items=[{
+                **item,
+                "list_type": list_type,
+                "sort_id": list_type,
+                "country": request.scope["country"],
+                "device": request.scope["device"],
+                "discovery_reason": (
+                    "Appeared in Roblox Up-and-Coming"
+                    if list_type == "up-and-coming"
+                    else "Appeared in Roblox Top Playing Now"
+                ),
+            } for item in page["items"]],
             cursor=request.cursor,
             next_cursor=page["next_cursor"],
             coverage=page["coverage"],

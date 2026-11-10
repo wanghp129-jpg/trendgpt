@@ -54,6 +54,7 @@ class RobloxChartAdapterTests(unittest.TestCase):
             root = Path(temp) / "validation" / "self-v1"
             with patch("trendgpt.adapters.roblox.get_public_text", return_value=json.dumps(body)) as fetch:
                 result = RobloxChartAdapter().fetch(_request(root))
+            self.assertTrue(Path(result.evidence_refs[0]["path"]).is_file())
 
         result.validate()
         self.assertEqual(result.status, "partial")
@@ -71,7 +72,8 @@ class RobloxChartAdapterTests(unittest.TestCase):
         self.assertEqual(result.items[0]["source_rank"], 1)
         self.assertEqual(result.scope["sort_id"], "up-and-coming")
         self.assertEqual(result.coverage["pagination_mode"], "opaque_page_token")
-        self.assertTrue(Path(result.evidence_refs[0]["path"]).is_file())
+        self.assertTrue(result.evidence_refs)
+        self.assertTrue(result.evidence_refs[0]["sha256"])
 
         query = parse_qs(urlsplit(fetch.call_args.args[0]).query)
         self.assertEqual(query["sortId"], ["up-and-coming"])
