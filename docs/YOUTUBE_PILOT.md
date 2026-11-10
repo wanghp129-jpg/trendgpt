@@ -1,5 +1,7 @@
 # YouTube recent-upload clue pilot — VPS verification
 
+VPS acceptance status: PASS_WITH_RISK. The two-query pilot completed two HTTP 200 requests, accepted 16 unresolved video clues, passed the candidate contract and created zero game entities. Search coverage remains limited; description snippets are preserved but still require Candidate Resolver review.
+
 ## Purpose
 
 Implement Lesson 14's YouTube role as a supplementary clue source, not a primary game-discovery source. The primary sources remain the Roblox and Steam platform lists.

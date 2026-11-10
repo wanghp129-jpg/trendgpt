@@ -14,6 +14,18 @@ def normalize_name(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def normalize_entity_key(value: str) -> str:
+    """Normalize punctuation/symbol variants for comparison, not automatic identity merging."""
+    if not isinstance(value, str):
+        raise TypeError("candidate name must be a string")
+    value = unicodedata.normalize("NFKC", value).casefold()
+    normalized = []
+    for char in value:
+        category = unicodedata.category(char)
+        normalized.append(" " if category.startswith(("P", "S")) else char)
+    return re.sub(r"\s+", " ", "".join(normalized)).strip()
+
+
 def candidate_keys(name: str, aliases: Iterable[str] = ()) -> set[str]:
     return {key for value in [name, *aliases] if value and (key := normalize_name(value))}
 

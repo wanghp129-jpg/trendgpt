@@ -14,11 +14,12 @@ from .benchmark import compare_snapshots
 from .benchmark_snapshot import read_archived_api_snapshot
 from .contracts import ContractError, validate_file, load_json
 from .ingest_reader import read_api_ingest_morning_batch
+from .identity_resolution import file_sha256, prepare_resolution_plan, resolve_candidate_snapshot
 from .entity_ledger import EntityFirstSeenLedger
 from .rule_replay import replay_rules
 from .rules import evaluate_feature_groups
 from .sources import SourceRequest, SourceResult, merge_source_results
-from .storage import StorageError, atomic_write_json
+from .storage import StorageError, atomic_write_json, reject_symlink_components
 
 
 def _print(value: Any) -> None:
@@ -49,6 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
     first_seen = sub.add_parser("record-first-seen", help="record stable platform-ID first-seen history across self-v1 runs")
     first_seen.add_argument("--input", required=True, help="candidate_keywords.json from one completed self-discovery run")
     first_seen.add_argument("--output-root", required=True, help="explicit path ending in self-v1")
+
+    prepare_resolution = sub.add_parser("prepare-resolution", help="create a review-only identity resolution plan")
+    prepare_resolution.add_argument("--input", required=True)
+    prepare_resolution.add_argument("--output-root", required=True)
+    prepare_resolution.add_argument("--output-relative")
+
+    resolve = sub.add_parser("resolve-candidates", help="apply only approved evidence-bound identity decisions to a copy")
+    resolve.add_argument("--input", required=True)
+    resolve.add_argument("--plan", required=True)
+    resolve.add_argument("--output-root", required=True)
+    resolve.add_argument("--output-relative")
+    resolve.add_argument("--report-relative")
 
     fetch = sub.add_parser("fetch-source", help="fetch one bounded page from a configured public source")
     fetch.add_argument("--source", choices=("steam", "roblox", "youtube"), required=True)
@@ -87,6 +100,99 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--proposed-rules", required=True)
     replay.add_argument("--outcomes", required=True, help="JSON array of candidate outcome records")
     return parser
+
+
+
+
+def _prepare_resolution(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.output_root).absolute()
+    if root.name != "self-v1":
+        raise ContractError("resolution output root must end in self-v1")
+    input_path = Path(args.input).absolute()
+    reject_symlink_components(input_path)
+    try:
+        input_path.relative_to(root)
+    except ValueError as exc:
+        raise ContractError("candidate input must be inside the configured self-v1 root") from exc
+    snapshot = load_json(input_path)
+    if not isinstance(snapshot, dict):
+        raise ContractError("candidate snapshot must be a JSON object")
+    from .contracts import validate_candidate_snapshot
+    validate_candidate_snapshot(snapshot)
+    digest = file_sha256(input_path)
+    plan = prepare_resolution_plan(snapshot, input_path=str(input_path), input_sha256=digest)
+    run_hash = sha256(snapshot["run_id"].encode("utf-8")).hexdigest()[:16]
+    relative = args.output_relative or str(Path("identity-resolution") / snapshot["date"] / run_hash / "resolution-plan.json")
+    relative_path = Path(relative)
+    if relative_path.is_absolute() or not relative_path.parts or ".." in relative_path.parts:
+        raise ContractError("resolution plan path must be a safe relative path")
+    target = root / relative_path
+    reject_symlink_components(target)
+    if target.exists() or target.is_symlink():
+        raise ContractError(f"refusing to overwrite existing resolution plan: {target}")
+    atomic_write_json(target, plan, root=root)
+    return {
+        "status": "plan_prepared", "run_id": snapshot["run_id"],
+        "input_sha256": digest, "clues": len(plan["decisions"]),
+        "suggested_matches": sum(len(item["matching_suggestions"]) for item in plan["decisions"]),
+        "approved_decisions": 0, "plan_path": str(target),
+        "note": "No identity decision was applied. Review and approve the plan before resolve-candidates.",
+    }
+
+
+def _resolve_candidates(args: argparse.Namespace) -> dict[str, Any]:
+    from .contracts import validate_candidate_snapshot
+    root = Path(args.output_root).absolute()
+    if root.name != "self-v1":
+        raise ContractError("resolution output root must end in self-v1")
+    input_path = Path(args.input).absolute()
+    plan_path = Path(args.plan).absolute()
+    reject_symlink_components(input_path)
+    reject_symlink_components(plan_path)
+    try:
+        input_path.relative_to(root)
+        plan_path.relative_to(root)
+    except ValueError as exc:
+        raise ContractError("candidate input and resolution plan must be inside the configured self-v1 root") from exc
+    snapshot = load_json(input_path)
+    plan = load_json(plan_path)
+    if not isinstance(snapshot, dict):
+        raise ContractError("candidate snapshot must be a JSON object")
+    validate_candidate_snapshot(snapshot)
+    input_digest = file_sha256(input_path)
+    resolved, report = resolve_candidate_snapshot(snapshot, plan, input_sha256=input_digest)
+    validate_candidate_snapshot(resolved)
+    if file_sha256(input_path) != input_digest:
+        raise ContractError("original candidate snapshot changed during resolution; refusing output")
+    run_hash = sha256(snapshot["run_id"].encode("utf-8")).hexdigest()[:16]
+    base = Path("identity-resolution") / snapshot["date"] / run_hash
+    output_relative = args.output_relative or str(base / "resolved-candidate_keywords.json")
+    report_relative = args.report_relative or str(base / "resolution-report.json")
+    targets = []
+    for relative in (output_relative, report_relative):
+        path = Path(relative)
+        if path.is_absolute() or not path.parts or ".." in path.parts:
+            raise ContractError("resolution output paths must be safe relative paths")
+        target = root / path
+        reject_symlink_components(target)
+        if target.exists() or target.is_symlink():
+            raise ContractError(f"refusing to overwrite existing resolution artifact: {target}")
+        targets.append(target)
+    output_path, report_path = targets
+    if output_path == report_path:
+        raise ContractError("resolved candidate and report paths must be different")
+    output_bytes = (json.dumps(resolved, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    report["output_sha256"] = sha256(output_bytes).hexdigest()
+    report["original_candidate_unchanged"] = file_sha256(input_path) == input_digest
+    atomic_write_json(output_path, resolved, root=root)
+    atomic_write_json(report_path, report, root=root)
+    return {
+        "status": "resolved", "run_id": snapshot["run_id"],
+        "input_sha256": input_digest, "output_sha256": sha256(output_bytes).hexdigest(),
+        "output_path": str(output_path), "report_path": str(report_path),
+        "applied": report["applied"], "pending_clues": report["pending_clues"],
+        "quality_tiers": report["quality_tiers"], "original_candidate_unchanged": report["original_candidate_unchanged"],
+    }
 
 
 def _make_adapter(source: str):
@@ -539,6 +645,12 @@ def main(argv: list[str] | None = None) -> int:
                 raise ContractError("candidate snapshot must be a JSON object")
             result = EntityFirstSeenLedger(args.output_root).record_snapshot(snapshot)
             _print(result)
+            return 0
+        if args.command == "prepare-resolution":
+            _print(_prepare_resolution(args))
+            return 0
+        if args.command == "resolve-candidates":
+            _print(_resolve_candidates(args))
             return 0
         if args.command == "fetch-source":
             result = _fetch_source(args)

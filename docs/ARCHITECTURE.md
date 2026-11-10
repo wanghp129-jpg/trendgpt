@@ -7,7 +7,8 @@ The current API system is a separate production pipeline. TrendGPT must not writ
 ## Components
 
 - `trendgpt.contracts`: strict JSON loading and contract checks.
-- `trendgpt.normalize`: deterministic Unicode/whitespace normalization and conservative exact/alias matching.
+- `trendgpt.normalize`: deterministic Unicode/whitespace/punctuation normalization and conservative exact/alias matching.
+- `trendgpt.identity_resolution`: hash-bound review plans, exact phrase suggestions, approved evidence-backed clue linking/candidate creation/non-game classification/cross-platform merges, and candidate identity/evidence tiers.
 - `trendgpt.benchmark`: optional API comparison. It counts only eligible self-discovered candidates observed before the frozen cutoff.
 - `trendgpt.state`: lock-protected state in a dedicated self-v1 directory.
 - `trendgpt.rules`: descriptive summaries of mature revenue observations. It never changes production rules.

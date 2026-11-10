@@ -113,6 +113,23 @@ The corrected pilot remains global unless a future endpoint response proves a na
 - [ ] Run the bounded YouTube live pilot on the VPS; verify both search queries, current HTML structure, video/channel IDs, evidence hashes and candidate contract.
 - [ ] Design a separate evidence-backed video-to-game identity resolution step; ambiguous titles remain unparsed.
 
+## Stage 2.4 — Candidate Resolver / identity adjudication
+
+- [x] Create deterministic, hash-bound review plans from candidate snapshots and unparsed source clues.
+- [x] Suggest exact normalized candidate-name/alias phrases found in YouTube titles or descriptions; suggestions never auto-approve.
+- [x] Apply only approved decisions with reviewer, reason and evidence references already present in the original snapshot.
+- [x] Link reviewed YouTube clues to existing game candidates without using video IDs as game IDs.
+- [x] Create reviewer-approved name-only candidates without fabricated platform IDs; route them to first-seen review.
+- [x] Preserve reviewed non-game clues and all original unparsed source evidence for audit.
+- [x] Support explicit cross-platform candidate merges, reject conflicting IDs on the same platform, and preserve all source/platform evidence.
+- [x] Normalize Unicode, punctuation and symbol variants for comparison and alias de-duplication without fuzzy identity merging.
+- [x] Add deterministic candidate quality tiers A/B/C/REVIEW based on stable identity and independent source evidence, not trend potential.
+- [x] Add CLI commands prepare-resolution and resolve-candidates; write resolved snapshots/reports separately and reject stale input hashes or output overwrites.
+- [x] Add prompts/candidate-resolution.md so ChatGPT suggestions remain pending and cannot self-approve.
+- [ ] Use the resolver on a real VPS snapshot; review YouTube clues and validate output/ledger behavior before treating identity resolution as operational.
+
+See docs/CANDIDATE_RESOLVER.md. The resolver is offline and does not invoke an LLM; ChatGPT/human review is an explicit plan-editing step. KD/trend validation remains outside this component.
+
 ## Stage 2 — source discovery
 
 1. Complete the bounded VPS pilot for Roblox Up-and-Coming and Top Playing Now; verify anonymous access, stable universe IDs, root place IDs, chart metadata, opaque pagination and evidence hashes.

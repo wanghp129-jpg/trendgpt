@@ -7,7 +7,7 @@ description: Discover candidate games from bounded public source adapters, prese
 
 ## Status
 
-The Python source adapters and bounded multi-source collector are implemented in this repository. Steam and Roblox have completed bounded VPS pilots with PASS_WITH_RISK. YouTube recent-upload search code is fixture-tested and awaits its bounded VPS pilot; video-to-game identity resolution remains separate and unverified. The Roblox pilot now requests global scope (country=all/device=all), records requested and server-declared effective scope separately, caps oversized responses at maxRows, preserves explicit null metadata fields, and accepts timezone-offset plus signs in ledger run IDs. Do not enable a timer or production Skill until each source is separately verified.
+The Python source adapters and bounded multi-source collector are implemented in this repository. Steam and Roblox have completed bounded VPS pilots with PASS_WITH_RISK. YouTube recent-upload search has completed a VPS PASS_WITH_RISK pilot; search coverage is limited and description-summary mapping remains a review task. Candidate Resolver now prepares hash-bound review plans and applies only approved, evidence-backed decisions. The Roblox pilot now requests global scope (country=all/device=all), records requested and server-declared effective scope separately, caps oversized responses at maxRows, preserves explicit null metadata fields, and accepts timezone-offset plus signs in ledger run IDs. Do not enable a timer or production Skill until each source is separately verified.
 
 ## Required inputs
 
@@ -41,6 +41,18 @@ The adapter records requested country/device separately from server-declared eff
 Use config/source-plan.youtube-validation.json and docs/YOUTUBE_PILOT.md for the controlled pilot. It uses the Lesson 14 queries releasedategameplay and upcominggame gameplay with the recent-upload filter sp=EgQIAhAB, one public search page per query, at most 15 accepted video rows/query and two requests total.
 
 The adapter reads the anonymous YouTube search HTML and extracts video/channel evidence. It does not use the Data API, credentials, browser sessions or cookies. A video title is not a game name: it deliberately omits candidate_name/name/keyword, so the candidate normalizer preserves these rows as unparsed clues. Relative published-time text is retained; published_at remains null. Do not create first-seen game entities from YouTube video IDs.
+
+## Candidate identity resolution
+
+Use docs/CANDIDATE_RESOLVER.md for the post-collection identity step. Run:
+
+    trendgpt prepare-resolution --input candidate_keywords.json --output-root ABS/self-v1
+
+This creates a deterministic plan bound to the original candidate SHA-256. Use prompts/candidate-resolution.md when asking ChatGPT to inspect the title, description, channel, exact phrase suggestions and source evidence. ChatGPT returns suggestions with approval_status=pending; the operator must review and explicitly approve them before applying. Apply the plan with:
+
+    trendgpt resolve-candidates --input candidate_keywords.json --plan PLAN.json --output-root ABS/self-v1
+
+The resolver does not call an LLM or network service itself. Only decisions marked approved with reviewer, reason and existing hash-verified evidence are applied. Supported actions are link_existing, create_candidate, not_game and unresolved; explicit cross-candidate merges are separate and reject conflicting IDs on the same platform. The original candidate snapshot is never modified. YouTube-only created candidates have no platform ID and remain first-seen review items; video IDs are never game IDs.
 
 ## First-seen ledger
 
